@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import json
 import pkgutil
 from pathlib import Path
@@ -52,10 +53,8 @@ class PluginManager:
 					for plugin in plugins:
 						self.available_plugins[plugin.game_id] = plugin
 			except Exception:
-				# Silently ignore plugin import errors so broken third-party
-				# plugins don't crash the whole app. If you need to debug a
-				# failing plugin, run the app from the command line to see
-				# the exception traceback.
+				# Log plugin import errors at debug level; don't crash the app.
+				logging.exception(f"Failed importing plugin module {name}")
 				continue
 
 	def _load_json_plugins(self) -> None:
@@ -77,8 +76,10 @@ class PluginManager:
 						plugin = plugin_from_json(entry)
 						self.available_plugins[plugin.game_id] = plugin
 					except Exception:
+						logging.exception(f"Failed constructing plugin from entry: {entry}")
 						continue
 		except Exception:
+			logging.exception("Failed loading JSON plugins")
 			return
 
 	def detect_games(self) -> List[Dict]:

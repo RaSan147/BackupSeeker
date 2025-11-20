@@ -215,5 +215,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 /Backups
+/backups
 /*.ignore
 BackupSeeker/gsm_config.json

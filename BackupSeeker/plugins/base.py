@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import logging
+
 from ..core import PathUtils
 
 
@@ -94,6 +96,7 @@ class GamePlugin(ABC):
 				if install_path and Path(install_path).exists():
 					return True
 			except Exception:
+				logging.exception(f"Registry check failed for {key_path} -> {value_name}")
 				continue
 		return False
 

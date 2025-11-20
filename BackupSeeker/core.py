@@ -116,7 +116,12 @@ class ConfigManager:
 	def __init__(self, app_dir: Path | None = None) -> None:
 		self.app_dir = app_dir or Path(os.path.dirname(os.path.abspath(__file__)))
 		self.config_path = self.app_dir / "gsm_config.json"
-		self.backup_root = self.app_dir / "Backups"
+		# Backup location settings
+		# backup_location_mode: "cwd" | "fixed"
+		# backup_fixed_path: user-chosen absolute path when mode == "fixed"
+		self.backup_location_mode: str = "cwd"
+		self.backup_fixed_path: str = ""
+		self.backup_root = Path.cwd() / "backups"
 
 		self.games: Dict[str, GameProfile] = {}
 		self.theme: str = "system"
@@ -125,6 +130,32 @@ class ConfigManager:
 
 		self.backup_root.mkdir(parents=True, exist_ok=True)
 		self.load_config()
+		# Re-evaluate backup root after loading config settings.
+		self.update_backup_root()
+		self.backup_root.mkdir(parents=True, exist_ok=True)
+
+	def update_backup_root(self) -> None:
+		"""Update backup_root based on current mode/path settings."""
+		if self.backup_location_mode == "fixed" and self.backup_fixed_path:
+			p = PathUtils.expand(self.backup_fixed_path)
+			self.backup_root = p
+		else:
+			self.backup_root = Path.cwd() / "backups"
+
+	def set_backup_mode_cwd(self) -> None:
+		self.backup_location_mode = "cwd"
+		self.backup_fixed_path = ""
+		self.update_backup_root()
+		self.backup_root.mkdir(parents=True, exist_ok=True)
+		self.save_config()
+
+	def set_backup_mode_fixed(self, fixed_path: str) -> None:
+		self.backup_location_mode = "fixed"
+		self.backup_fixed_path = fixed_path
+		self.update_backup_root()
+		self.backup_root.mkdir(parents=True, exist_ok=True)
+		self.save_config()
+
 
 	def add_game_from_plugin(self, plugin_data: dict) -> str:
 		"""Add a game profile originating from a plugin detection result."""
@@ -156,6 +187,9 @@ class ConfigManager:
 			wg = data.get("window_geometry")
 			self.window_geometry = wg if isinstance(wg, str) and wg else None
 			self.table_widths = data.get("table_widths", [])
+			# New backup location fields (fallbacks if missing)
+			self.backup_location_mode = data.get("backup_location_mode", self.backup_location_mode)
+			self.backup_fixed_path = data.get("backup_fixed_path", self.backup_fixed_path)
 		except json.JSONDecodeError:
 			logging.error("Config file is corrupted. Renaming and starting fresh.")
 			try:
@@ -173,6 +207,8 @@ class ConfigManager:
 			"theme": self.theme,
 			"window_geometry": self.window_geometry,
 			"table_widths": self.table_widths,
+			"backup_location_mode": self.backup_location_mode,
+			"backup_fixed_path": self.backup_fixed_path,
 			"last_updated": datetime.now().isoformat(),
 		}
 		tmp_path = self.config_path.with_suffix(".tmp")
@@ -182,8 +218,8 @@ class ConfigManager:
 				f.flush()
 				try:
 					os.fsync(f.fileno())
-				except Exception:
-					pass
+				except Exception as e:
+					logging.debug(f"fsync failed: {e}")
 			tmp_path.replace(self.config_path)
 		except Exception as e:
 			logging.error(f"Config save failed: {e}")

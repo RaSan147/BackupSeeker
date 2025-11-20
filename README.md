@@ -19,6 +19,7 @@ Table of Contents
 12. Roadmap
 13. Contributing
 14. License
+15. UI Roadmap
 
 Overview
 --------
@@ -45,10 +46,13 @@ Many save managers either hard‑code paths, lack cross-system portability, or s
 Architecture
 ------------
 - `BackupSeeker/core.py`: Pure logic (config, profile model, backup/restore helpers).
-- `BackupSeeker/ui.py`: PyQt6 GUI (profiles, backup/restore dashboard, plugin panel).
+- `BackupSeeker/ui.py`: PyQt6 GUI (profiles, backup/restore dashboard, plugin & storage panels).
 - `BackupSeeker/plugin_manager.py`: Discovers code and JSONC game plugins.
 - `BackupSeeker/plugins/base.py`: Plugin abstract base class + JSON adapter.
-- `Backups/`: Generated at runtime; holds regular backups and per-game `Safety/` folders.
+- Backup storage (configurable):
+	- Default: `./backups/` in the current working directory when the app launches.
+	- Fixed/custom: any user-chosen folder via Storage menu.
+	Each game gets its own subfolder plus a `Safety/` subfolder.
 
 Installation
 ------------
@@ -81,16 +85,25 @@ Configuration File
 The file `BackupSeeker/gsm_config.json` stores:
 - `games`: array of game profile objects (id, name, save_path, flags).
 - `theme`, `window_geometry`, `table_widths`, `last_updated`.
+- `backup_location_mode`: `cwd` or `fixed` (controls where backups go).
+- `backup_fixed_path`: absolute path used when mode is `fixed`.
 Corruption handling: on JSON decode failure the file is renamed to `gsm_config.json.corrupted` and a fresh config is started.
 
 Backups & Safety Archives
 -------------------------
-- Regular backups: `Backups/<GameName>/<GameName>_<YYYY-MM-DD_hh-mm-ss>.zip`.
-- Safety archives (created before any restore): `Backups/<GameName>/Safety/SAFETY_<timestamp>.zip` — a snapshot of the target folder before extraction.
+Storage root:
+- Default: `./backups/` relative to the process working directory.
+- Fixed: user-selected directory stored in config.
+
+Layout:
+- Regular backups: `<StorageRoot>/<GameName>/<GameName>_<YYYY-MM-DD_hh-mm-ss>.zip`.
+- Safety archives (created before any restore): `<StorageRoot>/<GameName>/Safety/SAFETY_<timestamp>.zip` — snapshot of target folder pre-restore.
+
 Restore process:
 1. Safety archive created if existing data present.
 2. (Optional) Clear folder when `clear_folder_on_restore` is true.
 3. Selected backup ZIP extracted.
+
 
 Plugin System
 -------------
@@ -146,6 +159,7 @@ Roadmap
 - Scheduled backups & optional cloud sync (user opt-in).
 - Marketplace / curated plugin index.
 - Advanced diff view before restore.
+- Storage improvements (multi-root presets, quota / auto-prune policies).
 
 Contributing
 ------------
