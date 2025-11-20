@@ -1,0 +1,10 @@
+// Copy an object from here into games.jsonc to add a new JSON-based plugin
+{
+  "id": "template_game_json",
+  "name": "Template Game (JSON)",
+  "save_paths": [
+    "%USERPROFILE%\\Saved Games\\TemplateGame"
+  ],
+  "file_patterns": ["*"],
+  "registry_keys": []
+}
