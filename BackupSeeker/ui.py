@@ -24,23 +24,31 @@ from PyQt6.QtWidgets import (
 	QFormLayout,
 	QHBoxLayout,
 	QLabel,
-	QLineEdit,
-	QListWidget,
 	QListWidgetItem,
 	QMainWindow,
 	QMessageBox,
-	QPushButton,
 	QTableWidget,
 	QTableWidgetItem,
 	QTabWidget,
-	QTextEdit,
 	QVBoxLayout,
 	QWidget,
 	QHeaderView,
 )
+# Default widget aliases use standard PyQt6 widgets. When running in
+# Fluent mode `BackupSeeker.ui_fluent` will inject qfluentwidgets
+# equivalents into this module at runtime (after QApplication exists).
+from PyQt6.QtWidgets import QLineEdit as _QLineEdit, QListWidget as _QListWidget, QPushButton as _QPushButton, QTextEdit as _QTextEdit, QDialog as _QDialog
+
+LineEdit = _QLineEdit
+ListWidget = _QListWidget
+PushButton = _QPushButton
+PrimaryPushButton = _QPushButton
+PlainTextEdit = _QTextEdit
+Dialog = _QDialog
 
 from .core import ConfigManager, GameProfile, PathUtils
 from .plugin_manager import PluginManager
+from .ui_shared import confirm_action, open_path_in_explorer
 
 
 class ThemeManager:
@@ -92,9 +100,15 @@ class ThemeManager:
 			app.setPalette(p)
 
 
-class GameEditorDialog(QDialog):
+class GameEditorDialog(Dialog):
 	def __init__(self, profile: Optional[GameProfile] = None, parent: QWidget | None = None) -> None:
-		super().__init__(parent)
+		# qfluentwidgets.Dialog accepts (title, content, parent), but the
+		# default Dialog alias may be a plain QDialog. Use a best-effort
+		# constructor call so both cases work.
+		try:
+			super().__init__("Game Profile 🎮", "", parent)
+		except TypeError:
+			super().__init__(parent)
 		self.profile = profile or GameProfile()
 		self.setWindowTitle("Game Profile 🎮")
 		self.setMinimumWidth(500)
@@ -102,12 +116,12 @@ class GameEditorDialog(QDialog):
 		layout = QVBoxLayout(self)
 		form = QFormLayout()
 
-		self.name_edit = QLineEdit(self.profile.name)
+		self.name_edit = LineEdit(self.profile.name)
 		self.name_edit.setPlaceholderText("e.g. Cyberpunk 2077")
 
-		self.path_edit = QLineEdit(self.profile.save_path)
+		self.path_edit = LineEdit(self.profile.save_path)
 		self.path_edit.setPlaceholderText("Paste path here...")
-		path_btn = QPushButton("📂 Browse")
+		path_btn = PushButton("📂 Browse")
 		path_btn.clicked.connect(self.browse_path)
 		path_layout = QHBoxLayout()
 		path_layout.addWidget(self.path_edit)
@@ -126,9 +140,9 @@ class GameEditorDialog(QDialog):
 		layout.addLayout(form)
 
 		btns = QHBoxLayout()
-		save = QPushButton("💾 Save Profile")
+		save = PushButton("💾 Save Profile")
 		save.clicked.connect(self.save)
-		cancel = QPushButton("❌ Cancel")
+		cancel = PushButton("❌ Cancel")
 		cancel.clicked.connect(self.reject)
 		btns.addWidget(save)
 		btns.addWidget(cancel)
@@ -155,11 +169,14 @@ class GameEditorDialog(QDialog):
 		self.accept()
 
 
-class PluginBrowserDialog(QDialog):
+class PluginBrowserDialog(Dialog):
 	"""Panel for searching, auto-detecting and adding plugin games."""
 
 	def __init__(self, plugin_manager: PluginManager, config: ConfigManager, parent: QWidget | None = None) -> None:
-		super().__init__(parent)
+		try:
+			super().__init__("Plugin Games 🎮", "", parent)
+		except TypeError:
+			super().__init__(parent)
 		self.plugin_manager = plugin_manager
 		self.config = config
 		self.setWindowTitle("Plugin Games 🎮")
@@ -172,11 +189,11 @@ class PluginBrowserDialog(QDialog):
 
 		# Search bar
 		search_row = QHBoxLayout()
-		self.search_edit = QLineEdit()
+		self.search_edit = LineEdit()
 		self.search_edit.setPlaceholderText("Search games (plugin database)...")
-		btn_search = QPushButton("🔎 Search")
+		btn_search = PushButton("🔎 Search")
 		btn_search.clicked.connect(self._on_search_clicked)
-		btn_reset = QPushButton("Reset")
+		btn_reset = PushButton("Reset")
 		btn_reset.clicked.connect(self._refresh_all_plugins)
 		search_row.addWidget(self.search_edit)
 		search_row.addWidget(btn_search)
@@ -184,16 +201,16 @@ class PluginBrowserDialog(QDialog):
 		layout.addLayout(search_row)
 
 		# List of games
-		self.list_widget = QListWidget()
+		self.list_widget = ListWidget()
 		layout.addWidget(self.list_widget)
 
 		# Buttons
 		btn_row = QHBoxLayout()
-		btn_detect = QPushButton("🔍 Auto Detect Installed")
+		btn_detect = PushButton("🔍 Auto Detect Installed")
 		btn_detect.clicked.connect(self._on_detect_clicked)
-		btn_add = QPushButton("➕ Add Selected to Profiles")
+		btn_add = PushButton("➕ Add Selected to Profiles")
 		btn_add.clicked.connect(self._on_add_selected)
-		btn_close = QPushButton("Close")
+		btn_close = PushButton("Close")
 		btn_close.clicked.connect(self.reject)
 		btn_row.addWidget(btn_detect)
 		btn_row.addWidget(btn_add)
@@ -268,17 +285,17 @@ class MainWindow(QMainWindow):
 		main_h = QHBoxLayout(central)
 
 		left = QVBoxLayout()
-		self.game_list = QListWidget()
+		self.game_list = ListWidget()
 		self.game_list.itemSelectionChanged.connect(self.on_game_select)
 		left.addWidget(QLabel("Profiles"))
 		left.addWidget(self.game_list)
-		btn_add = QPushButton("➕ Add Game")
+		btn_add = PushButton("➕ Add Game")
 		btn_add.clicked.connect(self.add_game)
 		left.addWidget(btn_add)
-		self.btn_edit = QPushButton("✏️ Edit")
+		self.btn_edit = PushButton("✏️ Edit")
 		self.btn_edit.clicked.connect(self.edit_game)
 		left.addWidget(self.btn_edit)
-		self.btn_del = QPushButton("🗑️ Delete")
+		self.btn_del = PushButton("🗑️ Delete")
 		self.btn_del.clicked.connect(self.delete_game)
 		left.addWidget(self.btn_del)
 		left_widget = QWidget()
@@ -295,12 +312,11 @@ class MainWindow(QMainWindow):
 		self.lbl_backup_root = QLabel()
 		self.lbl_backup_root.setObjectName("lblBackupRoot")
 
-		self.btn_backup = QPushButton("💾 BACKUP NOW")
+		self.btn_backup = PrimaryPushButton("💾 BACKUP NOW")
 		self.btn_backup.setMinimumHeight(40)
-		self.btn_backup.setStyleSheet("background-color: #2e7d32; color: white; font-weight: bold;")
 		self.btn_backup.clicked.connect(self.perform_backup)
 
-		self.log_view = QTextEdit()
+		self.log_view = PlainTextEdit()
 		self.log_view.setReadOnly(True)
 
 		dash_layout.addWidget(self.lbl_title)
@@ -328,13 +344,13 @@ class MainWindow(QMainWindow):
 		self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
 		self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
 
-		self.btn_restore_sel = QPushButton("♻️ Restore Selected")
+		self.btn_restore_sel = PushButton("♻️ Restore Selected")
 		self.btn_restore_sel.clicked.connect(self.perform_restore)
-		self.btn_open_sel = QPushButton("📂 Open Selected")
+		self.btn_open_sel = PushButton("📂 Open Selected")
 		self.btn_open_sel.clicked.connect(self.open_selected_backup_location)
-		self.btn_delete_sel = QPushButton("🗑️ Delete Selected")
+		self.btn_delete_sel = PushButton("🗑️ Delete Selected")
 		self.btn_delete_sel.clicked.connect(self.delete_selected_backups)
-		self.btn_refresh = QPushButton("🔄 Refresh List")
+		self.btn_refresh = PushButton("🔄 Refresh List")
 		self.btn_refresh.clicked.connect(self.refresh_backups)
 
 		restore_layout.addWidget(self.table)
@@ -467,12 +483,7 @@ class MainWindow(QMainWindow):
 		try:
 			path = self.config.backup_root
 			path.mkdir(parents=True, exist_ok=True)
-			if sys.platform.startswith("win"):
-				os.startfile(str(path))  # type: ignore[attr-defined]
-			elif sys.platform == "darwin":
-				os.system(f"open '{path}'")
-			else:
-				os.system(f"xdg-open '{path}'")
+			open_path_in_explorer(path)
 		except Exception as e:
 			QMessageBox.warning(self, "Open Folder", f"Could not open folder: {e}")
 
@@ -597,13 +608,13 @@ class MainWindow(QMainWindow):
 	def delete_game(self) -> None:
 		if not self.current_profile:
 			return
-		res = QMessageBox.question(self, "Delete", f"Delete profile '{self.current_profile.name}'?")
-		if res == QMessageBox.StandardButton.Yes:
-			del self.config.games[self.current_profile.id]
-			self.config.save_config()
-			self.refresh_game_list()
-			self.current_profile = None
-			self.update_ui_state()
+		if not confirm_action(self, "Delete", f"Delete profile '{self.current_profile.name}'?"):
+			return
+		del self.config.games[self.current_profile.id]
+		self.config.save_config()
+		self.refresh_game_list()
+		self.current_profile = None
+		self.update_ui_state()
 
 	def perform_backup(self) -> None:
 		from .core import run_backup
@@ -801,13 +812,13 @@ class MainWindow(QMainWindow):
 		row_idx = rows[0]
 		fpath_str = self.table.item(row_idx, 3).data(Qt.ItemDataRole.UserRole)
 		fpath = Path(fpath_str)
-		res = QMessageBox.warning(
-			self,
-			"Restore",
-			f"Are you sure you want to restore?\n{fpath.name}\n\nCurrent data will be archived in the 'Safety' folder.",
-			QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+		message = (
+			"Are you sure you want to restore\n"
+			f"{fpath.name}\n\n"
+			"Current data will be archived in the 'Safety' folder."
 		)
-		if res == QMessageBox.StandardButton.Yes:
+		if not confirm_action(self, "Restore", message):
+			return
 			plugin = self.plugin_manager.get_plugin_for_profile(self.current_profile.plugin_id)
 			profile_dict = self.current_profile.to_dict()
 			if plugin is not None:
@@ -840,12 +851,7 @@ class MainWindow(QMainWindow):
 			return
 		folder = fpath.parent
 		try:
-			if sys.platform.startswith("win"):
-				os.startfile(str(folder))  # type: ignore[attr-defined]
-			elif sys.platform == "darwin":
-				os.system(f"open '{folder}'")
-			else:
-				os.system(f"xdg-open '{folder}'")
+			open_path_in_explorer(folder)
 			self.log(f"Opened folder: {folder}")
 		except Exception as e:
 			QMessageBox.critical(self, "Open Failed", str(e))
@@ -895,7 +901,7 @@ class MainWindow(QMainWindow):
 				f"QMenu::item:disabled {{ color: {disabled_txt}; background-color: transparent; }}"
 			)
 		except Exception:
-			pass
+			self.log("Context menu styling failed")
 		selected_rows = self._get_selected_rows()
 		# If user right-clicks a row that's not part of the existing selection,
 		# treat it as a single selection for the purposes of the context menu.
@@ -926,12 +932,7 @@ class MainWindow(QMainWindow):
 			return
 		parent = p.parent
 		try:
-			if sys.platform.startswith("win"):
-				os.startfile(str(parent))  # type: ignore[attr-defined]
-			elif sys.platform == "darwin":
-				os.system(f"open '{parent}'")
-			else:
-				os.system(f"xdg-open '{parent}'")
+			open_path_in_explorer(parent)
 			self.log(f"Opened folder: {parent}")
 		except Exception as e:
 			QMessageBox.critical(self, "Open Failed", str(e))
@@ -979,7 +980,8 @@ class MainWindow(QMainWindow):
 		self.refresh_backups()
 
 	def log(self, msg: str) -> None:
-		self.log_view.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+		# PlainTextEdit uses appendPlainText instead of append
+		self.log_view.insertPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
 
 def run_app() -> int:

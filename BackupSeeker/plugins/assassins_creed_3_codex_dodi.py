@@ -20,6 +20,9 @@ class AssassinsCreed3Plugin(GamePlugin):
 			"%PUBLIC%\\Documents\\uPlay\\CODEX\\Saves\\AssassinsCreedIIIRemastered",
 		]
 
+	@property
+	def icon(self) -> str:
+		return "⚔️"  # Add an emoji icon
 
 def get_plugins():
 	return [AssassinsCreed3Plugin()]

@@ -12,7 +12,6 @@ Table of Contents
 5. Installation
 6. Quick Start
 7. Configuration File
-8. Backups & Safety Archives
 9. Plugin System
 10. Developing Plugins (Summary)
 11. Troubleshooting
@@ -28,6 +27,33 @@ BackupSeeker helps you avoid losing progress by making timestamped, compressed b
 Features
 --------
 - Profile-based save management (add, edit, delete game save profiles).
+
+## Fluent UI Migration
+
+This repository is being migrated to use PyQt6-Fluent-Widgets (Fluent mode)
+for a cleaner, modern UI. A starter Fluent entry module has been added as
+`BackupSeeker/ui_fluent.py` that initializes the Fluent library and launches
+the existing main window. The migration will proceed incrementally — native
+Fluent widgets will replace standard widgets over time.
+
+If you want to enable the Fluent UI locally, install the requirements and run
+the Fluent launcher:
+
+PowerShell (example):
+```
+& C:/Python/Python313/python.exe -m pip install -r requirements.txt
+& C:/Python/Python313/python.exe -m pip install "PyQt6-Fluent-Widgets[full]"
+& C:/Python/Python313/python.exe -m BackupSeeker.ui_fluent
+```
+
+Or use the bundled installer script on Windows:
+```
+install_me.bat
+```
+
+Note: the project assumes `PyQt6` and `PyQt6-Fluent-Widgets[full]` are available
+in the target environment.
+
 - Timestamped ZIP backups (optional compression toggle per profile).
 - Automatic Safety archives before every restore operation.
 - Portable path handling via environment-variable contraction (e.g. `%USERPROFILE%`).

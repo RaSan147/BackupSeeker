@@ -79,14 +79,22 @@ class GameProfile:
 	use_compression: bool = True
 	clear_folder_on_restore: bool = True
 	plugin_id: str = ""
+	# Optional icon field for future use
+	icon: str = ""  # Can be path to icon file or emoji
 
 	def __post_init__(self) -> None:
 		if self.file_patterns is None:
 			self.file_patterns = ["*"]
+		# Ensure icon is always a string, not None
+		if self.icon is None:
+			self.icon = ""
 
 	def to_dict(self) -> dict:
 		data = asdict(self)
 		data.pop("file_patterns", None)
+		# Convert icon to empty string if None
+		if data.get("icon") is None:
+			data["icon"] = ""
 		return data
 
 	@classmethod
@@ -102,6 +110,12 @@ class GameProfile:
 			save_path = PathUtils.contract(raw_path)
 		else:
 			save_path = raw_path
+
+		# Handle icon field safely
+		icon = data.get("icon", "")
+		if icon is None:
+			icon = ""
+
 		return cls(
 			id=data.get("id", ""),
 			name=data.get("name", ""),
@@ -109,6 +123,7 @@ class GameProfile:
 			use_compression=data.get("use_compression", True),
 			clear_folder_on_restore=data.get("clear_folder_on_restore", True),
 			plugin_id=data.get("plugin_id", ""),
+			icon=icon
 		)
 
 
@@ -166,6 +181,7 @@ class ConfigManager:
 			use_compression=plugin_data.get("use_compression", True),
 			clear_folder_on_restore=plugin_data.get("clear_folder_on_restore", True),
 			plugin_id=plugin_data.get("plugin_id", plugin_data.get("id", "")),
+			icon=plugin_data.get("icon", ""),
 		)
 		self.games[profile.id] = profile
 		self.save_config()
@@ -196,7 +212,7 @@ class ConfigManager:
 				bad_file = self.config_path.with_suffix(".json.corrupted")
 				shutil.move(self.config_path, bad_file)
 			except Exception:
-				pass
+				logging.error("Failed to rename corrupted config file.")
 			self.games = {}
 		except Exception as e:
 			logging.error(f"Config load failed: {e}")

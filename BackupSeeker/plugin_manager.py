@@ -6,6 +6,9 @@ import json
 import pkgutil
 from pathlib import Path
 from typing import Dict, List
+import shutil
+import urllib.request
+import urllib.parse
 
 from .plugins.base import GamePlugin, plugin_from_json
 
@@ -23,6 +26,9 @@ class PluginManager:
 		self.base_dir = base_dir
 		self.plugins_dir = base_dir / "plugins"
 		self.available_plugins: Dict[str, GamePlugin] = {}
+		# directory to store downloaded/copied plugin assets (images)
+		self.data_dir = Path(base_dir) / "data"
+		self.data_dir.mkdir(parents=True, exist_ok=True)
 		self.load_plugins()
 
 	def load_plugins(self) -> None:
@@ -51,6 +57,11 @@ class PluginManager:
 				if hasattr(module, "get_plugins"):
 					plugins = module.get_plugins()
 					for plugin in plugins:
+						# process plugin icon (may copy/download into data dir)
+						try:
+							self._process_plugin_icon(plugin)
+						except Exception:
+							logging.exception(f"Failed processing icon for plugin {plugin.game_id}")
 						self.available_plugins[plugin.game_id] = plugin
 			except Exception:
 				# Log plugin import errors at debug level; don't crash the app.
@@ -74,6 +85,10 @@ class PluginManager:
 				for entry in data:
 					try:
 						plugin = plugin_from_json(entry)
+						try:
+							self._process_plugin_icon(plugin)
+						except Exception:
+							logging.exception(f"Failed processing icon for plugin {plugin.game_id}")
 						self.available_plugins[plugin.game_id] = plugin
 					except Exception:
 						logging.exception(f"Failed constructing plugin from entry: {entry}")
@@ -88,4 +103,55 @@ class PluginManager:
 			if plugin.is_detected():
 				detected.append(plugin.to_profile())
 		return detected
+
+	def _process_plugin_icon(self, plugin: GamePlugin) -> None:
+		"""Ensure plugin.icon is available under the `data/` folder.
+
+		Behaviors:
+		- If `plugin.icon` is an HTTP(S) URL, download it into `data/` and
+		  set `plugin._saved_icon` to the saved path string.
+		- If `plugin.icon` is a local file path (exists on disk but not under
+		  `data/`), copy it into `data/` and set `_saved_icon`.
+		- If `plugin.icon` already points inside `data/`, leave as-is and set `_saved_icon`.
+		- If empty or appears to be an emoji, leave `_saved_icon` empty.
+
+		Also record original source in `plugin._icon_source` for future updates.
+		"""
+		icon = getattr(plugin, "icon", "") or ""
+		plugin._icon_source = icon
+		plugin._saved_icon = ""
+		if not icon:
+			return
+		icon = str(icon)
+		# URL
+		if icon.lower().startswith(("http://", "https://")):
+			try:
+				parsed = urllib.parse.urlparse(icon)
+				fn = Path(parsed.path).name or f"{plugin.game_id}.img"
+				dest = self.data_dir / f"plugin_{plugin.game_id}_{fn}"
+				# download (overwrite existing)
+				urllib.request.urlretrieve(icon, str(dest))
+				plugin._saved_icon = str(dest)
+				return
+			except Exception:
+				logging.exception(f"Failed to download icon for {plugin.game_id} from {icon}")
+				return
+		# Local path
+		p = Path(icon)
+		if p.exists():
+			try:
+				# if already inside data dir, keep as-is
+				if self.data_dir in p.parents or p.resolve() == self.data_dir:
+					plugin._saved_icon = str(p)
+					return
+				# copy to data dir
+				dest = self.data_dir / f"plugin_{plugin.game_id}_{p.name}"
+				shutil.copy2(str(p), str(dest))
+				plugin._saved_icon = str(dest)
+				return
+			except Exception:
+				logging.exception(f"Failed to copy plugin icon for {plugin.game_id} from {p}")
+				return
+		# otherwise: unknown format (emoji or id) - leave as-is
+		return
 

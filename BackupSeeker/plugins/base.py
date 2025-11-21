@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-import winreg
+try:
+	import winreg
+except Exception:  # pragma: no cover - non-Windows environments
+	winreg = None
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -23,6 +26,12 @@ class GamePlugin(ABC):
 	def game_id(self) -> str:
 		"""Unique identifier for the game."""
 
+	# Runtime-populated fields for plugin asset management. Declared here
+	# so static analyzers know these attributes exist when PluginManager
+	# assigns to them (e.g. `_saved_icon` and `_icon_source`).
+	_saved_icon: str = ""
+	_icon_source: str = ""
+
 	@property
 	@abstractmethod
 	def game_name(self) -> str:
@@ -40,6 +49,11 @@ class GamePlugin(ABC):
 	@property
 	def registry_keys(self) -> List[Tuple[str, str]]:
 		return []
+
+	@property
+	def icon(self) -> str:
+		"""Optional icon for the game (emoji or path to icon file)."""
+		return ""  # Default empty string
 
 	# --- Optional lifecycle hooks (override as needed) ---
 
@@ -85,6 +99,9 @@ class GamePlugin(ABC):
 		return self._check_registry()
 
 	def _check_registry(self) -> bool:
+		# If winreg isn't available (non-Windows), skip registry checks
+		if winreg is None:
+			return False
 		for key_path, value_name in self.registry_keys:
 			try:
 				if key_path.startswith("HKEY_LOCAL_MACHINE"):
@@ -126,6 +143,7 @@ class GamePlugin(ABC):
 			"use_compression": True,
 			"clear_folder_on_restore": True,
 			"plugin_id": self.game_id,
+			"icon": self.icon,
 		}
 
 
@@ -158,6 +176,10 @@ def plugin_from_json(data: Dict) -> GamePlugin:
 		@property
 		def registry_keys(self) -> List[Tuple[str, str]]:
 			return self._data.get("registry_keys", [])
+
+		@property
+		def icon(self) -> str:
+			return self._data.get("icon", "")
 
 	return JsonGamePlugin(data)
 
