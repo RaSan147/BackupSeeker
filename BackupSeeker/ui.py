@@ -819,23 +819,25 @@ class MainWindow(QMainWindow):
 		)
 		if not confirm_action(self, "Restore", message):
 			return
-			plugin = self.plugin_manager.get_plugin_for_profile(self.current_profile.plugin_id)
-			profile_dict = self.current_profile.to_dict()
-			if plugin is not None:
-				profile_dict = plugin.preprocess_restore(profile_dict)
-				self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
-			try:
-				run_restore(self.current_profile, self.config, fpath, self.current_profile.clear_folder_on_restore)
-			except Exception as e:
-				self.log(f"RESTORE ERROR: {e}")
-				QMessageBox.critical(self, "Error", str(e))
-				return
-			result_data = {"backup_path": str(fpath)}
-			if plugin is not None:
-				result_data = plugin.postprocess_restore(result_data)
-			self.log("RESTORE COMPLETE")
-			QMessageBox.information(self, "Done", "Game Restored Successfully.")
-			self.refresh_backups()
+		# Apply optional plugin preprocess/postprocess hooks
+		plugin = self.plugin_manager.get_plugin_for_profile(self.current_profile.plugin_id)
+		profile_dict = self.current_profile.to_dict()
+		if plugin is not None:
+			profile_dict = plugin.preprocess_restore(profile_dict)
+			# push any changed save_path back into profile
+			self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
+		try:
+			run_restore(self.current_profile, self.config, fpath, self.current_profile.clear_folder_on_restore)
+		except Exception as e:
+			self.log(f"RESTORE ERROR: {e}")
+			QMessageBox.critical(self, "Error", str(e))
+			return
+		result_data = {"backup_path": str(fpath)}
+		if plugin is not None:
+			result_data = plugin.postprocess_restore(result_data)
+		self.log("RESTORE COMPLETE")
+		QMessageBox.information(self, "Done", "Game Restored Successfully.")
+		self.refresh_backups()
 
 	def open_selected_backup_location(self) -> None:
 		rows = self._get_selected_rows()
