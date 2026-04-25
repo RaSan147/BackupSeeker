@@ -1,5 +1,7 @@
 Contributing to BackupSeeker
 ============================
+Documentation index: **[`Docs/`](Docs/)** — start with [`Docs/WORKFLOW.md`](Docs/WORKFLOW.md) and [`Docs/PLUGIN_DEVELOPMENT.md`](Docs/PLUGIN_DEVELOPMENT.md).
+
 Thank you for your interest in improving BackupSeeker. This guide covers issue reporting, proposing features, coding standards, plugin submissions, and review expectations.
 
 Table of Contents
@@ -47,12 +49,13 @@ Be respectful, inclusive, and patient. Harassment, discrimination, or abusive be
 python -m venv .venv
 ./.venv/Scripts/Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install PyQt6
+python -m pip install -r requirements.txt
 ```
 Run the app:
 ```pwsh
 python -m BackupSeeker.main
 ```
+This installs PyQt6, PyQt6-Fluent-Widgets, frameless-window support, and `requests` (plugin asset downloads) as pinned in `requirements.txt`.
 
 6. Coding Standards
 -------------------
@@ -86,7 +89,8 @@ python -m BackupSeeker.main
 
 10. Backwards Compatibility
 ---------------------------
-- Changing profile schema: add migration logic or fallback handling.
+- Changing profile schema: bump `config_format_version` in `ConfigManager` and migrate in `load_config` when needed.
+- Archive bundles: `_backupseeker/bundle.json` uses `format` **1** only (`BackupSeeker/archive/format_registry.py`); future format bumps stay centralized there.
 - Renaming plugin IDs breaks existing profiles; introduce a new plugin instead.
 - Deprecations: mark clearly in docs, keep for at least one minor release.
 

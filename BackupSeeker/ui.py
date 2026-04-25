@@ -18,7 +18,6 @@ from PyQt6.QtCore import Qt, QByteArray, QEvent
 from PyQt6.QtGui import QAction, QActionGroup, QFont, QPalette, QColor
 from PyQt6.QtWidgets import (
 	QApplication,
-	QCheckBox,
 	QDialog,
 	QFileDialog,
 	QFormLayout,
@@ -46,9 +45,50 @@ PrimaryPushButton = _QPushButton
 PlainTextEdit = _QTextEdit
 Dialog = _QDialog
 
-from .core import ConfigManager, GameProfile, PathUtils
+from .core import ConfigManager, GameProfile, PathUtils, clear_before_restore, run_restore
 from .plugin_manager import PluginManager
-from .ui_shared import confirm_action, open_path_in_explorer
+from .ui_shared import (
+	confirm_action,
+	confirm_restore,
+	ensure_plugin_restore_inputs,
+	offer_plugin_restore_input_review,
+	open_path_in_explorer,
+	prompt_plugin_primary_path_fix,
+)
+
+
+def _plugin_for_profile(profile: GameProfile, win: QWidget | None):
+	if win is None or not getattr(profile, "plugin_id", ""):
+		return None
+	pm = getattr(win, "plugin_manager", None)
+	return pm.get_plugin_for_profile(profile.plugin_id) if pm else None
+
+
+def _profile_display(profile: GameProfile, win: QWidget | None) -> str:
+	return profile.resolved_name(_plugin_for_profile(profile, win))
+
+
+def _qfont_with_resolved_size(font: QFont) -> QFont:
+	"""Copy *font* with an explicit point or pixel size.
+
+	List/item fonts inherited from stylesheets often use pointSize -1;
+	modifying and re-setting such a font triggers Qt warnings about
+	``setPointSize(-1)``.
+	"""
+	f = QFont(font)
+	if f.pointSize() > 0 or f.pixelSize() > 0:
+		return f
+	app = QApplication.instance()
+	if isinstance(app, QApplication):
+		base = app.font()
+		if base.pointSize() > 0:
+			f.setPointSize(base.pointSize())
+			return f
+		if base.pixelSize() > 0:
+			f.setPixelSize(base.pixelSize())
+			return f
+	f.setPointSize(9)
+	return f
 
 
 class ThemeManager:
@@ -110,32 +150,36 @@ class GameEditorDialog(Dialog):
 		except TypeError:
 			super().__init__(parent)
 		self.profile = profile or GameProfile()
+		self._editor_parent = parent
 		self.setWindowTitle("Game Profile 🎮")
 		self.setMinimumWidth(500)
 
 		layout = QVBoxLayout(self)
 		form = QFormLayout()
 
-		self.name_edit = LineEdit(self.profile.name)
-		self.name_edit.setPlaceholderText("e.g. Cyberpunk 2077")
+		plug = _plugin_for_profile(self.profile, parent)
+		self.name_edit = LineEdit()
+		if self.profile.plugin_id:
+			self.name_edit.setText(self.profile.resolved_name(plug))
+			self.name_edit.setReadOnly(True)
+			self.name_edit.setPlaceholderText("Defined by plugin")
+		else:
+			self.name_edit.setText(self.profile.name)
+			self.name_edit.setPlaceholderText("e.g. Cyberpunk 2077")
 
-		self.path_edit = LineEdit(self.profile.save_path)
-		self.path_edit.setPlaceholderText("Paste path here...")
+		self.path_edit = LineEdit(self.profile.editor_primary_path_display(plug))
+		if self.profile.plugin_id:
+			self.path_edit.setPlaceholderText("Leave empty — use plugin detection")
+		else:
+			self.path_edit.setPlaceholderText("Paste path here...")
 		path_btn = PushButton("📂 Browse")
 		path_btn.clicked.connect(self.browse_path)
 		path_layout = QHBoxLayout()
 		path_layout.addWidget(self.path_edit)
 		path_layout.addWidget(path_btn)
 
-		self.compress_cb = QCheckBox("Use Compression")
-		self.compress_cb.setChecked(self.profile.use_compression)
-		self.clear_cb = QCheckBox("Clear folder before restore")
-		self.clear_cb.setChecked(self.profile.clear_folder_on_restore)
-
 		form.addRow("Name:", self.name_edit)
 		form.addRow("Path:", path_layout)
-		form.addRow("", self.compress_cb)
-		form.addRow("", self.clear_cb)
 
 		layout.addLayout(form)
 
@@ -154,16 +198,24 @@ class GameEditorDialog(Dialog):
 			self.path_edit.setText(PathUtils.contract(d))
 
 	def save(self) -> None:
-		name = self.name_edit.text().strip()
 		raw_path = PathUtils.clean_input_path(self.path_edit.text())
-		if not name or not raw_path:
-			QMessageBox.warning(self, "Error", "Name and Path are required.")
-			return
-		contracted_path = PathUtils.contract(raw_path)
-		self.profile.name = name
-		self.profile.save_path = contracted_path
-		self.profile.use_compression = self.compress_cb.isChecked()
-		self.profile.clear_folder_on_restore = self.clear_cb.isChecked()
+		plug = _plugin_for_profile(self.profile, self._editor_parent)
+
+		if self.profile.plugin_id:
+			if plug:
+				ver = getattr(plug, "version", "")
+				if isinstance(ver, str) and ver.strip():
+					self.profile.plugin_version = ver.strip()
+			self.profile.name = ""
+			self.profile.apply_editor_primary_path(plug, raw_path)
+		else:
+			name = self.name_edit.text().strip()
+			if not name or not raw_path:
+				QMessageBox.warning(self, "Error", "Name and Path are required.")
+				return
+			self.profile.name = name
+			self.profile.save_path = PathUtils.contract(raw_path)
+
 		if not self.profile.id:
 			self.profile.id = f"game_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 		self.accept()
@@ -240,7 +292,7 @@ class PluginBrowserDialog(Dialog):
 		for i in range(self.list_widget.count()):
 			item = self.list_widget.item(i)
 			pid = item.data(Qt.ItemDataRole.UserRole)
-			font = item.font()
+			font = _qfont_with_resolved_size(item.font())
 			font.setBold(pid in detected_ids)
 			item.setFont(font)
 
@@ -274,6 +326,8 @@ class MainWindow(QMainWindow):
 		self.current_profile: Optional[GameProfile] = None
 		self._worker_thread = None
 		self.plugin_manager = PluginManager(self.config.app_dir)
+		self.config.sync_plugin_versions_from(self.plugin_manager)
+		self.config.save_config()
 		self.init_ui()
 
 	def init_ui(self) -> None:
@@ -332,14 +386,15 @@ class MainWindow(QMainWindow):
 		self.tab_restore = QWidget()
 		restore_layout = QVBoxLayout(self.tab_restore)
 		self.table = QTableWidget()
-		self.table.setColumnCount(4)
-		self._header_labels = ["Type", "Date", "Size", "Filename"]
+		self.table.setColumnCount(5)
+		self._header_labels = ["Type", "Date", "Size", "Archive", "Filename"]
 		self.table.setHorizontalHeaderLabels(self._header_labels)
 		header = self.table.horizontalHeader()
 		header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
 		header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
 		header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
 		header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+		header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 		self._table_header = header
 		self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
 		self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
@@ -390,19 +445,19 @@ class MainWindow(QMainWindow):
 		super().showEvent(event)
 		if self.config.table_widths:
 			for i, w in enumerate(self.config.table_widths):
-				if i < 3:
+				if i < 5:
 					self.table.setColumnWidth(i, w)
 		else:
 			total_w = self.table.width()
 			if total_w > 0:
-				col_w = int(total_w * 0.15)
+				col_w = int(total_w * 0.12)
 				self.table.setColumnWidth(0, col_w)
 				self.table.setColumnWidth(1, col_w)
 				self.table.setColumnWidth(2, col_w)
 
 	def closeEvent(self, event):  # type: ignore[override]
 		self.config.window_geometry = self.saveGeometry().toHex().data().decode("ascii")
-		widths = [self.table.columnWidth(i) for i in range(3)]
+		widths = [self.table.columnWidth(i) for i in range(5)]
 		self.config.table_widths = widths
 		self.config.save_config()
 		event.accept()
@@ -556,7 +611,7 @@ class MainWindow(QMainWindow):
 	def refresh_game_list(self) -> None:
 		self.game_list.clear()
 		for pid, p in self.config.games.items():
-			item = QListWidgetItem(f"🎮 {p.name}")
+			item = QListWidgetItem(f"🎮 {_profile_display(p, self)}")
 			item.setData(Qt.ItemDataRole.UserRole, pid)
 			self.game_list.addItem(item)
 
@@ -580,8 +635,9 @@ class MainWindow(QMainWindow):
 		self.tab_restore.setEnabled(enabled)
 		self.update_storage_display()
 		if enabled and self.current_profile is not None:
-			self.lbl_title.setText(f"🎮 {self.current_profile.name}")
-			self.lbl_path.setText(f"<b>Path:</b> {self.current_profile.save_path}")
+			self.lbl_title.setText(f"🎮 {_profile_display(self.current_profile, self)}")
+			ep = self.current_profile.effective_save_path(_plugin_for_profile(self.current_profile, self))
+			self.lbl_path.setText(f"<b>Path:</b> {ep or '(from plugin — at backup)'}")
 		else:
 			self.lbl_title.setText("Select a Game")
 			self.lbl_path.setText("<b>Path:</b> -")
@@ -593,7 +649,7 @@ class MainWindow(QMainWindow):
 			self.config.games[dlg.profile.id] = dlg.profile
 			self.config.save_config()
 			self.refresh_game_list()
-			self.log(f"Added {dlg.profile.name}")
+			self.log(f"Added {_profile_display(dlg.profile, self)}")
 
 	def edit_game(self) -> None:
 		if not self.current_profile:
@@ -603,12 +659,12 @@ class MainWindow(QMainWindow):
 			self.config.save_config()
 			self.refresh_game_list()
 			self.on_game_select()
-			self.log(f"Updated {self.current_profile.name}")
+			self.log(f"Updated {_profile_display(self.current_profile, self)}")
 
 	def delete_game(self) -> None:
 		if not self.current_profile:
 			return
-		if not confirm_action(self, "Delete", f"Delete profile '{self.current_profile.name}'?"):
+		if not confirm_action(self, "Delete", f"Delete profile '{_profile_display(self.current_profile, self)}'?"):
 			return
 		del self.config.games[self.current_profile.id]
 		self.config.save_config()
@@ -617,20 +673,39 @@ class MainWindow(QMainWindow):
 		self.update_ui_state()
 
 	def perform_backup(self) -> None:
-		from .core import run_backup
-
 		if not self.current_profile:
 			return
-		self.log(f"Starting backup for {self.current_profile.name}...")
-		# Apply optional plugin preprocess/postprocess hooks
-		plugin = self.plugin_manager.get_plugin_for_profile(self.current_profile.plugin_id)
-		profile_dict = self.current_profile.to_dict()
+		self.log(f"Starting backup for {_profile_display(self.current_profile, self)}...")
+		self._execute_backup_attempt(self.current_profile, offer_path_fix=True)
+
+	def _execute_backup_attempt(self, profile: GameProfile, *, offer_path_fix: bool) -> None:
+		from .core import run_backup
+
+		plugin = self.plugin_manager.get_plugin_for_profile(profile.plugin_id)
+		if not ensure_plugin_restore_inputs(self, profile, plugin, self.config):
+			self.log("Backup cancelled.")
+			return
+		profile_dict = profile.as_operation_dict(plugin)
 		if plugin is not None:
 			profile_dict = plugin.preprocess_backup(profile_dict)
-			# push any changed save_path back into profile
-			self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
+			if not profile.plugin_id:
+				profile.save_path = profile_dict.get("save_path", profile.save_path)
 		try:
-			dest = run_backup(self.current_profile, self.config)
+			dest = run_backup(profile, self.config, plugin)
+		except (RuntimeError, FileNotFoundError) as e:
+			msg = str(e)
+			self.log(f"Backup skipped: {msg}")
+			if offer_path_fix and prompt_plugin_primary_path_fix(
+				self,
+				profile,
+				plugin,
+				self.config,
+				detail=msg,
+			):
+				self._execute_backup_attempt(profile, offer_path_fix=False)
+				return
+			QMessageBox.warning(self, "Nothing to back up", msg)
+			return
 		except Exception as e:
 			self.log(f"ERROR: {e}")
 			QMessageBox.critical(self, "Error", str(e))
@@ -644,14 +719,15 @@ class MainWindow(QMainWindow):
 		self.refresh_backups()
 
 	def refresh_backups(self) -> None:
-		from .core import ConfigManager
+		from .core import ConfigManager, read_archive_metadata, summarize_archive_metadata
 
 		self.table.setRowCount(0)
 		if not self.current_profile:
 			return
-		reg_dir = self.config.get_game_backup_dir(self.current_profile.name)
+		dn = _profile_display(self.current_profile, self)
+		reg_dir = self.config.get_game_backup_dir(dn)
 		backups = list(reg_dir.glob("*.zip"))
-		safe_dir = self.config.get_safety_backup_dir(self.current_profile.name)
+		safe_dir = self.config.get_safety_backup_dir(dn)
 		safety_backups = list(safe_dir.glob("*.zip"))
 		all_files = []
 		for f in backups:
@@ -667,6 +743,8 @@ class MainWindow(QMainWindow):
 				size_str = f"{bsize/1024:.1f} KB"
 			else:
 				size_str = f"{bsize/1024/1024:.1f} MB"
+			meta = read_archive_metadata(fpath)
+			summ = summarize_archive_metadata(meta, zip_path=fpath)
 			row_dict = {
 				"type": "🛡️ Safety" if btype == "Safety" else "💾 Regular",
 				"type_rank": 1 if btype == "Safety" else 0,
@@ -674,6 +752,8 @@ class MainWindow(QMainWindow):
 				"timestamp": fpath.stat().st_mtime,
 				"size": size_str,
 				"bytes": bsize,
+				"archive": summ.get("summary", ""),
+				"archive_tooltip": summ.get("tooltip", ""),
 				"filename": fpath.name,
 				"path": str(fpath),
 			}
@@ -696,9 +776,13 @@ class MainWindow(QMainWindow):
 			self.table.setItem(row, 0, QTableWidgetItem(row_dict["type"]))
 			self.table.setItem(row, 1, QTableWidgetItem(row_dict["date"]))
 			self.table.setItem(row, 2, QTableWidgetItem(row_dict["size"]))
+			arch_item = QTableWidgetItem(row_dict.get("archive", ""))
+			arch_item.setToolTip(row_dict.get("archive_tooltip", ""))
+			self.table.setItem(row, 3, arch_item)
 			item = QTableWidgetItem(row_dict["filename"])
 			item.setData(Qt.ItemDataRole.UserRole, row_dict["path"])
-			self.table.setItem(row, 3, item)
+			item.setToolTip(row_dict.get("archive_tooltip", ""))
+			self.table.setItem(row, 4, item)
 		self._on_backup_selection_changed()
 
 	def _ensure_sort_state(self) -> None:
@@ -802,32 +886,28 @@ class MainWindow(QMainWindow):
 		return super().eventFilter(obj, event)
 
 	def perform_restore(self) -> None:
-		from .core import run_restore
-
 		if not self.current_profile:
 			return
 		rows = self._get_selected_rows()
 		if len(rows) != 1:
 			return
 		row_idx = rows[0]
-		fpath_str = self.table.item(row_idx, 3).data(Qt.ItemDataRole.UserRole)
+		fpath_str = self.table.item(row_idx, 4).data(Qt.ItemDataRole.UserRole)
 		fpath = Path(fpath_str)
-		message = (
-			"Are you sure you want to restore\n"
-			f"{fpath.name}\n\n"
-			"Current data will be archived in the 'Safety' folder."
-		)
-		if not confirm_action(self, "Restore", message):
-			return
-		# Apply optional plugin preprocess/postprocess hooks
 		plugin = self.plugin_manager.get_plugin_for_profile(self.current_profile.plugin_id)
-		profile_dict = self.current_profile.to_dict()
+		if not ensure_plugin_restore_inputs(self, self.current_profile, plugin, self.config):
+			return
+		if not offer_plugin_restore_input_review(self, self.current_profile, plugin, self.config):
+			return
+		if not confirm_restore(self, self.current_profile, plugin, self.config, fpath):
+			return
+		profile_dict = self.current_profile.as_operation_dict(plugin)
 		if plugin is not None:
 			profile_dict = plugin.preprocess_restore(profile_dict)
-			# push any changed save_path back into profile
-			self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
+			if not self.current_profile.plugin_id:
+				self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
 		try:
-			run_restore(self.current_profile, self.config, fpath, self.current_profile.clear_folder_on_restore)
+			run_restore(self.current_profile, self.config, fpath, clear_before_restore(plugin), plugin)
 		except Exception as e:
 			self.log(f"RESTORE ERROR: {e}")
 			QMessageBox.critical(self, "Error", str(e))
@@ -844,7 +924,7 @@ class MainWindow(QMainWindow):
 		if len(rows) != 1:
 			return
 		row_idx = rows[0]
-		fpath_str = self.table.item(row_idx, 3).data(Qt.ItemDataRole.UserRole)
+		fpath_str = self.table.item(row_idx, 4).data(Qt.ItemDataRole.UserRole)
 		if not fpath_str:
 			return
 		fpath = Path(fpath_str)
@@ -870,7 +950,7 @@ class MainWindow(QMainWindow):
 
 	def _build_backup_context_menu(self, row: int):
 		from PyQt6.QtWidgets import QMenu
-		fpath_item = self.table.item(row, 3)
+		fpath_item = self.table.item(row, 4)
 		if not fpath_item:
 			return None
 		fpath_str = fpath_item.data(Qt.ItemDataRole.UserRole)
@@ -950,7 +1030,7 @@ class MainWindow(QMainWindow):
 			return
 		files = []
 		for r in rows:
-			item = self.table.item(r, 3)
+			item = self.table.item(r, 4)
 			if item is None:
 				continue
 			path_str = item.data(Qt.ItemDataRole.UserRole)

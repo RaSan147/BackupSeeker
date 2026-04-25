@@ -218,3 +218,5 @@ __marimo__/
 /backups
 /*.ignore
 BackupSeeker/gsm_config.json
+/backups*
+/OLD ZIPS

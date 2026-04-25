@@ -7,6 +7,7 @@ BackupSeeker is a lightweight, modular manager for creating, restoring, and safe
 - **Overview**
 - **Features**
 - **Architecture**
+- **Documentation** (`Docs/`)
 - **Installation**
 - **Quick start**
 - **Configuration**
@@ -27,43 +28,59 @@ BackupSeeker creates timestamped ZIP archives of game save folders and provides 
 - Portable contracted paths (environment variable tokens like `%USERPROFILE%`).
 - Theme switching and persisted window geometry.
 - Plugin discovery: Python modules + JSONC descriptors.
-- Lifecycle hooks for plugin-driven backup/restore extensions.
+- Declarative `save_sources` (directories, registry probes, prompts) with lifecycle hooks for backup/restore extensions.
 
 **Architecture (key files)**
-- `BackupSeeker/core.py` — core logic and profile model.
-- `BackupSeeker/ui.py` — main PyQt6 UI.
-- `BackupSeeker/ui_fluent.py` — optional Fluent UI launcher using PyQt6-Fluent-Widgets.
-- `BackupSeeker/plugin_manager.py` — plugin discovery and loading.
-- `BackupSeeker/plugins/` — built-in plugin base + shipable plugin files.
+- `BackupSeeker/core.py` — core logic, `GameProfile`, backup/restore orchestration.
+- `BackupSeeker/main.py` — entry: Fluent UI when imports succeed, else legacy `BackupSeeker.ui.run_app`.
+- `BackupSeeker/ui_fluent/` — Fluent UI (PyQt6-Fluent-Widgets): `app_runner.py` (`run_modern_fluent_app`), `main_window.py`, dashboard/plugins/profiles/backups pages, `fluent_impl.py` re-exports.
+- `BackupSeeker/modern_widgets.py` — shared Fluent cards, navigation helpers, dialogs.
+- `BackupSeeker/ui.py` — legacy PyQt6 UI (`run_app`) used as fallback.
+- `BackupSeeker/plugin_manager.py` — plugin discovery and asset download (icons/posters).
+- `BackupSeeker/plugins/base.py` — `GamePlugin` API; `plugins/save_sources.py` — `save_sources` schema.
+- `BackupSeeker/plugins/` — built-in plugins, `games.jsonc`, templates.
+
+For layering, startup flow, and backup pipeline details, see [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
+
+**Documentation (`Docs/`)**
+
+| Doc | Contents |
+|-----|----------|
+| [Docs/PRD.md](Docs/PRD.md) | Product goals, scope, success criteria |
+| [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md) | System design and runtime flow |
+| [Docs/ROADMAP.md](Docs/ROADMAP.md) | Phased roadmap |
+| [Docs/PLANS.md](Docs/PLANS.md) | Planning backlog and initiatives |
+| [Docs/WORKFLOW.md](Docs/WORKFLOW.md) | Dev and PR workflow |
+| [Docs/PLUGIN_DEVELOPMENT.md](Docs/PLUGIN_DEVELOPMENT.md) | Plugin authoring |
+
+Index: [Docs/README.md](Docs/README.md).
 
 **Installation**
 Requirements:
 - Python 3.11+ (tested with 3.13).
 
-Install dependencies (recommended inside a virtual environment):
+Install dependencies (recommended inside a virtual environment). `requirements.txt` includes PyQt6, PyQt6-Fluent-Widgets, frameless window support, and `requests` (plugin assets).
+
 ```pwsh
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
-If you want to use the Fluent widgets, also install:
-```pwsh
-python -m pip install "PyQt6-Fluent-Widgets[full]"
-```
 
-On Windows there's a convenience script: `install_me.bat` (inspects `requirements.txt`).
+On Windows there is a convenience script: `install_me.bat` (runs `pip install -r requirements.txt` next to the batch file).
 
 **Quick start**
-From the repository root you can run either:
+From the repository root:
+
 ```pwsh
-# run the package entry
+# Preferred package entry (Fluent UI; falls back to legacy UI on failure)
 python -m BackupSeeker.main
-# or run the top-level launcher script
+
+# Or the top-level launcher (delegates to BackupSeeker.main)
 python BackupSeeker.py
-```
-To launch the Fluent UI directly for testing:
-```pwsh
+
+# Launch Fluent UI directly (same runner as main’s happy path)
 python -m BackupSeeker.ui_fluent
 ```
 
@@ -82,17 +99,20 @@ Restore steps performed by the app:
 2. Optionally clear destination folder (if configured).
 3. Extract selected backup ZIP.
 
+**Maintenance scripts**
+- `scripts/upgrade_backup_zips.ps1` (and `.bat` wrapper) — refresh embedded portable tooling inside existing backup ZIPs via `python -m BackupSeeker.archive.upgrade_zip`. See script header for usage.
+
 **Plugin system**
 Supported plugin types:
-- Python modules placed in `BackupSeeker/plugins/` exposing `get_plugins()`.
+- Python modules placed in `BackupSeeker/plugins/` exposing `get_plugins()` (or discoverable `GamePlugin` subclasses per template).
 - JSONC descriptors inside `BackupSeeker/plugins/games.jsonc`.
 
-Detection strategies include path existence checks and optional Windows registry lookups. Plugins can implement lifecycle hooks: `preprocess_backup`, `postprocess_backup`, `preprocess_restore`, `postprocess_restore`.
+Plugins describe saves through **`save_sources`** (directory paths, optional Windows registry entries, prompts). Derived fields such as `save_paths` and `registry_keys` are computed from that list. Optional filtering via `plugins/plugin_index.json` (allow/block lists). Plugins can implement lifecycle hooks: `preprocess_backup`, `postprocess_backup`, `preprocess_restore`, `postprocess_restore`, and advanced **mechanical** hooks for custom archive rows or portable restore (see template plugin).
 
 **Plugin development**
-See `BackupSeeker/PLUGIN_DEV.md` for a full guide and examples. In short:
-- Python plugins live in `BackupSeeker/plugins/<your_plugin>.py` and should provide `get_plugins()` returning one or more `GamePlugin` instances.
-- JSONC entries are appended to `BackupSeeker/plugins/games.jsonc` or `games.template.jsonc` for reference.
+See [Docs/PLUGIN_DEVELOPMENT.md](Docs/PLUGIN_DEVELOPMENT.md) for a full guide. In short:
+- Python plugins live in `BackupSeeker/plugins/<your_plugin>.py` and should subclass `GamePlugin` with `save_sources` (preferred) or rely on derived `save_paths`.
+- JSONC entries go in `BackupSeeker/plugins/games.jsonc`; use `games.template.jsonc` as a scaffold.
 - Use contracted env vars (e.g. `%USERPROFILE%`) for portability.
 
 **Troubleshooting**
@@ -100,17 +120,18 @@ See `BackupSeeker/PLUGIN_DEV.md` for a full guide and examples. In short:
 - Detection issues: verify the expanded path exists in PowerShell using `Test-Path` with expanded variables.
 - UI tracebacks: run the app from a console (`python -m BackupSeeker.main`) to see errors; check `gsm_config.json` rotation on parse errors.
 
-**Roadmap (short)**
+**Roadmap**
+See [Docs/ROADMAP.md](Docs/ROADMAP.md) for phased planning. Highlights:
+
 - Profile import/export, retention policies, scheduled backups.
 - Improved plugin UX and curated plugin index.
 - Optional cloud sync (user opt-in) and encrypted backups.
 
 **Contributing**
-See `CONTRIBUTING.md` for contribution guidelines. Keep changes small and focused; avoid changing existing `game_id` values for plugins.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. Keep changes small and focused; avoid changing existing `game_id` values for plugins.
 
 **License**
 This repository includes a `LICENSE` file (MIT). See `LICENSE` at the project root for terms.
 
 ---
-For detailed plugin guidance, open `BackupSeeker/PLUGIN_DEV.md`.
-
+For detailed plugin guidance, see [Docs/PLUGIN_DEVELOPMENT.md](Docs/PLUGIN_DEVELOPMENT.md).

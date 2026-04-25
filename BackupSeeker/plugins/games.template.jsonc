@@ -2,9 +2,22 @@
 {
   "id": "template_game_json",
   "name": "Template Game (JSON)",
-  "save_paths": [
-    "%USERPROFILE%\\Saved Games\\TemplateGame"
+  "save_sources": [
+    {
+      "id": "path_0",
+      "kind": "directory",
+      "paths": ["%USERPROFILE%/Saved Games/TemplateGame"]
+    }
   ],
   "file_patterns": ["*"],
-  "registry_keys": []
+  // Optional: export registry values into bundle.json backups. Default false.
+  "backup_registry_values": false,
+  // Optional: exclude glob patterns from backup walks (relative POSIX paths).
+  "backup_exclude_globs": ["**/cache/**"],
+  // Optional: logical_key -> short folder name inside the ZIP (sanitized).
+  "zip_key_aliases": {},
+  // Optional: lines appended to archive README.
+  "readme_extra_lines": ["Requires demo DLC for cloud saves."],
+  // Optional: false = merge restore (ZIP overwrites paths only). Default true = wipe each save root before unpack.
+  "clear_folder_on_restore": true
 }

@@ -21,13 +21,14 @@ from qfluentwidgets import (
     NavigationInterface, NavigationItemPosition,
     FluentWindow, MessageBox, InfoBar, InfoBarPosition, PushButton,
     PrimaryPushButton, LineEdit, ListWidget, PlainTextEdit, TableWidget,
-    CheckBox, ComboBox, StrongBodyLabel, BodyLabel, CaptionLabel,
+    ComboBox, StrongBodyLabel, BodyLabel, CaptionLabel,
     Dialog, StateToolTip, SplitTitleBar, RoundMenu, Action,
     FluentIcon as FIF, TeachingTip, TeachingTipTailPosition,
     ElevatedCardWidget, setTheme, SwitchButton
 )
 
-from .core import ConfigManager, GameProfile, PathUtils, run_backup, run_restore
+from .core import GameProfile, PathUtils
+from .fluent_window import resolve_plugin_for_profile
 
 
 class RoundedCard(ElevatedCardWidget):
@@ -188,31 +189,57 @@ class ModernGameEditor(Dialog):
         form_widget = QWidget()
         form_layout = QVBoxLayout(form_widget)
 
-        # Hide built-in title/content labels to avoid duplication
-        if hasattr(self, 'titleLabel'):
-            try:
-                self.titleLabel.hide()
-            except Exception:
-                pass
-        if hasattr(self, 'contentLabel'):
-            try:
-                self.contentLabel.hide()
-            except Exception:
-                pass
+        # Hide built-in title/content labels to avoid duplication (Fluent Dialog optional API)
+        try:
+            self.titleLabel.hide()
+        except AttributeError:
+            pass
+        except Exception:
+            pass
+        try:
+            self.contentLabel.hide()
+        except AttributeError:
+            pass
+        except Exception:
+            pass
 
-        # Name field
+        # Name field (read-only when profile is plugin-backed — name comes from plugin)
         form_layout.addWidget(BodyLabel("Game Name"))
         self.name_edit = LineEdit()
-        self.name_edit.setText(self.profile.name)
-        self.name_edit.setPlaceholderText("Enter game name...")
+        plug = resolve_plugin_for_profile(self.profile, self)
+        if self.profile.plugin_id:
+            self.name_edit.setText(self.profile.resolved_name(plug))
+            self.name_edit.setReadOnly(True)
+            self.name_edit.setPlaceholderText("Defined by plugin")
+        else:
+            self.name_edit.setText(self.profile.name)
+            self.name_edit.setPlaceholderText("Enter game name...")
         form_layout.addWidget(self.name_edit)
 
-        # Path field
-        form_layout.addWidget(BodyLabel("Save Folder Path"))
+        # Path field (plugins may relabel — e.g. install folder vs save folder)
+        path_heading = "Save Folder Path"
+        path_placeholder_manual = "Paste or browse for save folder..."
+        path_placeholder_plugin_default = "Leave empty — use plugin detection at backup"
+        hint_pair = None
+        if self.profile.plugin_id and plug:
+            hints_fn = getattr(plug, "primary_path_editor_hints", None)
+            if callable(hints_fn):
+                try:
+                    hint_pair = hints_fn()
+                except Exception:
+                    hint_pair = None
+            if isinstance(hint_pair, (tuple, list)) and len(hint_pair) >= 2:
+                path_heading = str(hint_pair[0])
+                path_placeholder_plugin_default = str(hint_pair[1])
+
+        form_layout.addWidget(BodyLabel(path_heading))
         path_layout = QHBoxLayout()
         self.path_edit = LineEdit()
-        self.path_edit.setText(self.profile.save_path)
-        self.path_edit.setPlaceholderText("Paste or browse for save folder...")
+        self.path_edit.setText(self.profile.editor_primary_path_display(plug))
+        if self.profile.plugin_id:
+            self.path_edit.setPlaceholderText(path_placeholder_plugin_default)
+        else:
+            self.path_edit.setPlaceholderText(path_placeholder_manual)
 
         self.browse_btn = PushButton("Browse")
         self.browse_btn.setFixedWidth(80)
@@ -222,19 +249,27 @@ class ModernGameEditor(Dialog):
         path_layout.addWidget(self.browse_btn)
         form_layout.addLayout(path_layout)
 
-        # Options
-        self.compress_cb = CheckBox("Use compression")
-        self.compress_cb.setChecked(self.profile.use_compression)
-
-        self.clear_cb = CheckBox("Clear folder before restore")
-        self.clear_cb.setChecked(self.profile.clear_folder_on_restore)
-
-        form_layout.addWidget(self.compress_cb)
-        form_layout.addWidget(self.clear_cb)
         form_layout.addStretch()
 
         # Buttons - add only if dialog does not already provide actions
-        has_dialog_actions = hasattr(self, 'yesButton') or hasattr(self, 'cancelButton') or hasattr(self, 'buttonGroup')
+        has_dialog_actions = False
+        try:
+            if self.yesButton is not None:
+                has_dialog_actions = True
+        except AttributeError:
+            pass
+        if not has_dialog_actions:
+            try:
+                if self.cancelButton is not None:
+                    has_dialog_actions = True
+            except AttributeError:
+                pass
+        if not has_dialog_actions:
+            try:
+                if self.buttonGroup is not None:
+                    has_dialog_actions = True
+            except AttributeError:
+                pass
         if not has_dialog_actions:
             btn_holder = QWidget()
             btn_layout = QHBoxLayout(btn_holder)
@@ -253,46 +288,54 @@ class ModernGameEditor(Dialog):
         parent_layout = self.layout() or QVBoxLayout(self)
         inserted = False
         try:
-            if hasattr(self, 'buttonGroup') and self.buttonGroup is not None:
-                # Prefer inserting into the fluent Dialog's main vBoxLayout
-                if hasattr(self, 'vBoxLayout') and getattr(self, 'vBoxLayout') is not None:
-                    vbox = self.vBoxLayout
-                    for i in range(vbox.count()):
-                        item = vbox.itemAt(i)
-                        if item is None:
-                            continue
-                        try:
-                            if item.layout() is self.buttonGroup:
-                                vbox.insertLayout(i, form_layout)
-                                inserted = True
-                                break
-                        except Exception:
-                            pass
-                else:
-                    # Fallback: try to find the buttonGroup inside the parent_layout
-                    for i in range(parent_layout.count()):
-                        item = parent_layout.itemAt(i)
-                        if item is None:
-                            continue
-                        try:
-                            if item.layout() is self.buttonGroup:
-                                if hasattr(self, 'textLayout') and getattr(self, 'textLayout') is not None:
-                                    self.textLayout.addLayout(form_layout)
-                                else:
-                                    parent_layout.addWidget(form_widget)
-                                inserted = True
-                                break
-                        except Exception:
-                            pass
+            bg = self.buttonGroup
+            vbox = self.vBoxLayout
+        except AttributeError:
+            bg = None
+            vbox = None
+        try:
+            if bg is not None and vbox is not None:
+                for i in range(vbox.count()):
+                    item = vbox.itemAt(i)
+                    if item is None:
+                        continue
+                    try:
+                        if item.layout() is bg:
+                            vbox.insertLayout(i, form_layout)
+                            inserted = True
+                            break
+                    except Exception:
+                        pass
+            elif bg is not None:
+                for i in range(parent_layout.count()):
+                    item = parent_layout.itemAt(i)
+                    if item is None:
+                        continue
+                    try:
+                        if item.layout() is bg:
+                            try:
+                                tl = self.textLayout
+                            except AttributeError:
+                                tl = None
+                            if tl is not None:
+                                tl.addLayout(form_layout)
+                            else:
+                                parent_layout.addWidget(form_widget)
+                            inserted = True
+                            break
+                    except Exception:
+                        pass
         except Exception:
             inserted = False
 
         if not inserted:
-            # Fallbacks: if dialog exposes textLayout, add there; otherwise
-            # append to the main layout.
             try:
-                if hasattr(self, 'textLayout') and getattr(self, 'textLayout') is not None:
-                    self.textLayout.addWidget(form_widget)
+                tl = self.textLayout
+            except AttributeError:
+                tl = None
+            try:
+                if tl is not None:
+                    tl.addWidget(form_widget)
                 else:
                     parent_layout.addWidget(form_widget)
             except Exception:
@@ -305,35 +348,45 @@ class ModernGameEditor(Dialog):
             self.path_edit.setText(contracted)
             
     def _save(self):
-        name = self.name_edit.text().strip()
         raw_path = PathUtils.clean_input_path(self.path_edit.text())
-        
-        if not name:
-            TeachingTip.create(
-                target=self.name_edit,
-                icon=FIF.INFO,
-                title="Name required",
-                content="Please enter a game name",
-                parent=self
-            )
-            return
-            
-        if not raw_path:
-            TeachingTip.create(
-                target=self.path_edit,
-                icon=FIF.INFO,
-                title="Path required", 
-                content="Please select a save folder path",
-                parent=self
-            )
-            return
-            
-        self.profile.name = name
-        self.profile.save_path = PathUtils.contract(raw_path)
-        self.profile.use_compression = self.compress_cb.isChecked()
-        self.profile.clear_folder_on_restore = self.clear_cb.isChecked()
-        
+
+        plug = resolve_plugin_for_profile(self.profile, self)
+
+        if self.profile.plugin_id:
+            if plug:
+                gn = plug.game_name
+                if isinstance(gn, str) and gn.strip():
+                    self.profile.name = gn.strip()
+                ver = plug.version
+                if isinstance(ver, str) and ver.strip():
+                    self.profile.plugin_version = ver.strip()
+            self.profile.apply_editor_primary_path(plug, raw_path)
+        else:
+            name = self.name_edit.text().strip()
+            if not name:
+                TeachingTip.create(
+                    target=self.name_edit,
+                    icon=FIF.INFO,
+                    title="Name required",
+                    content="Please enter a game name",
+                    parent=self
+                )
+                return
+
+            if not raw_path:
+                TeachingTip.create(
+                    target=self.path_edit,
+                    icon=FIF.INFO,
+                    title="Path required",
+                    content="Please select a save folder path",
+                    parent=self
+                )
+                return
+
+            self.profile.name = name
+            self.profile.save_path = PathUtils.contract(raw_path)
+
         if not self.profile.id:
             self.profile.id = f"game_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
+
         self.accept()

@@ -3,10 +3,15 @@
   {
     "id": "ac3_remastered_json",
     "name": "Assassin's Creed III Remastered CODEX DODI (JSON)",
-    "save_paths": [
-      "%PUBLIC%\\Documents\\uPlay\\CODEX\\Saves\\AssassinsCreedIIIRemastered"
+    "save_sources": [
+      {
+        "id": "path_0",
+        "kind": "directory",
+        "paths": [
+          "%PUBLIC%/Documents/uPlay/CODEX/Saves/AssassinsCreedIIIRemastered"
+        ]
+      }
     ],
-    "file_patterns": ["*"],
-    "registry_keys": []
+    "file_patterns": ["*"]
   }
 ]

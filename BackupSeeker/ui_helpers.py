@@ -6,8 +6,6 @@ QApplication palette lightness as a safe fallback.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 try:
     # qfluentwidgets exposes isDarkTheme at package level in many installs
     from qfluentwidgets import isDarkTheme as _qfw_is_dark  # type: ignore
@@ -57,15 +55,15 @@ def is_app_dark() -> bool:
         # If qconfig exists and has a theme attribute, try to resolve AUTO
         if qconfig is not None and Theme is not None:
             try:
-                t = getattr(qconfig, 'theme', None)
-                if t is not None:
-                    if t == Theme.DARK:
-                        return True
-                    if t == Theme.LIGHT:
-                        return False
-                    # AUTO or unknown: fall through to palette
-            except Exception:
-                pass
+                t = qconfig.theme  # type: ignore[attr-defined]
+            except AttributeError:
+                t = None
+            if t is not None:
+                if t == Theme.DARK:
+                    return True
+                if t == Theme.LIGHT:
+                    return False
+                # AUTO or unknown: fall through to palette
 
         # Last-resort: use QApplication palette lightness
         if QApplication is not None:
