@@ -29,6 +29,10 @@ class TemplatePlugin(GamePlugin):
     version: str = "1.0.0"  # Update when making plugin changes
 
     @property
+    def is_template(self) -> bool:
+        return True
+
+    @property
     def game_id(self) -> str:
         return "template_game"
 

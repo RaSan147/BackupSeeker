@@ -123,6 +123,29 @@ def _manifest_roots_from_profile(
 class PathUtils:
 	"""Robust path manipulation and environment variable handling."""
 
+	_shell_folders_cache: Dict[str, str] = {}
+
+	@staticmethod
+	def get_windows_shell_folder(name: str, default_fallback: str) -> str:
+		if name in PathUtils._shell_folders_cache:
+			return PathUtils._shell_folders_cache[name]
+
+		val = None
+		if winreg is not None:
+			try:
+				reg_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+				with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
+					raw_val, _ = winreg.QueryValueEx(key, name)
+					val = os.path.expandvars(raw_val)
+			except Exception:
+				pass
+
+		if not val:
+			val = os.path.expandvars(default_fallback)
+
+		PathUtils._shell_folders_cache[name] = val
+		return val
+
 	@staticmethod
 	def clean_input_path(raw_path: str) -> str:
 		if not raw_path:
@@ -138,6 +161,24 @@ class PathUtils:
 	def expand(path_str: str) -> Path:
 		if not path_str:
 			return Path("")
+
+		if platform.system() == "Windows":
+			norm_path = path_str.replace("\\", "/")
+			mappings = [
+				(r"^%USERPROFILE%/(?:OneDrive/)?Documents", "Personal", "%USERPROFILE%/Documents"),
+				(r"^%USERPROFILE%/(?:OneDrive/)?Saved Games", "{4C5C2F52-7905-46D2-9598-E73F28247014}", "%USERPROFILE%/Saved Games"),
+				(r"^%USERPROFILE%/(?:OneDrive/)?Desktop", "Desktop", "%USERPROFILE%/Desktop"),
+				(r"^%USERPROFILE%/(?:OneDrive/)?Pictures", "My Pictures", "%USERPROFILE%/Pictures"),
+				(r"^%USERPROFILE%/(?:OneDrive/)?Music", "My Music", "%USERPROFILE%/Music"),
+				(r"^%USERPROFILE%/(?:OneDrive/)?Videos", "My Video", "%USERPROFILE%/Videos"),
+			]
+
+			for pattern, reg_name, fallback in mappings:
+				if re.match(pattern, norm_path, re.IGNORECASE):
+					real_path = PathUtils.get_windows_shell_folder(reg_name, fallback)
+					path_str = re.sub(pattern, real_path.replace("\\", "/"), norm_path, flags=re.IGNORECASE)
+					break
+
 		expanded = os.path.expandvars(path_str)
 		expanded = os.path.expanduser(expanded)
 		return Path(expanded)
@@ -592,6 +633,7 @@ class ConfigManager:
 		self.ui_view_profiles_management: str = "list"
 		self.ui_view_backups_management: str = "list"
 		self.ui_view_restore_dialog: str = "list"
+		self.developer_mode: bool = False
 
 		self.backup_root.mkdir(parents=True, exist_ok=True)
 		self.load_config()
@@ -707,6 +749,8 @@ class ConfigManager:
 				uv.get("restore_dialog"), self.ui_view_restore_dialog
 			)
 
+		self.developer_mode = bool(data.get("developer_mode", False))
+
 		if self.config_format_version != CONFIG_FORMAT_VERSION:
 			for prof in self.games.values():
 				if prof.plugin_id:
@@ -724,6 +768,7 @@ class ConfigManager:
 			"backup_location_mode": self.backup_location_mode,
 			"backup_fixed_path": self.backup_fixed_path,
 			"config_format_version": CONFIG_FORMAT_VERSION,
+			"developer_mode": self.developer_mode,
 			"last_updated": datetime.now().isoformat(),
 			"ui_views": {
 				"dashboard_profiles": self.ui_view_dashboard_profiles,
@@ -844,6 +889,8 @@ def _gather_archive_rows(
 			)
 			if isinstance(raw, list):
 				mechanical = cast(List[Tuple[str, Path, Path]], raw)
+		except _pr.PluginHookError:
+			raise
 		except Exception:
 			logging.exception(
 				"mechanical_collect_archive_rows failed for %r",
@@ -905,6 +952,8 @@ def _finalize_bundle_body(plugin: object | None, body: Dict[str, Any]) -> Dict[s
 	try:
 		out = _pr.mechanical_finalize_bundle(plugin, body)
 		return cast(Dict[str, Any], out) if isinstance(out, dict) else body
+	except _pr.PluginHookError:
+		raise
 	except Exception:
 		logging.exception("mechanical_finalize_bundle failed for %r", _pr.plugin_log_id(plugin))
 		return body
@@ -1165,6 +1214,8 @@ def run_restore(
 					"raw_bundle": raw,
 				},
 			)
+		except _pr.PluginHookError:
+			raise
 		except Exception:
 			logging.exception(
 				"mechanical_after_app_restore failed for %r",

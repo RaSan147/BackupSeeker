@@ -128,6 +128,18 @@ class GamePlugin(ABC):
 
 		return True
 
+	@property
+	def is_disabled(self) -> bool:
+		"""When True, the plugin is loaded but ignored by the system."""
+
+		return False
+
+	@property
+	def is_template(self) -> bool:
+		"""When True, the plugin is treated as a template and not a real game plugin."""
+
+		return False
+
 	def save_detection_groups(self) -> List[Tuple[str, List[str]]]:
 		"""``(logical_key, paths…)`` — one group per ``directory`` source ``id``."""
 
@@ -669,6 +681,14 @@ def plugin_from_json(data: Dict) -> GamePlugin:
 		@property
 		def clear_folder_on_restore(self) -> bool:
 			return bool(self._data.get("clear_folder_on_restore", True))
+
+		@property
+		def is_disabled(self) -> bool:
+			return bool(self._data.get("is_disabled", False))
+
+		@property
+		def is_template(self) -> bool:
+			return bool(self._data.get("is_template", False))
 
 		@property
 		def icon(self) -> str:

@@ -7,7 +7,8 @@ import sys
 # sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from .core import ConfigManager, GameProfile, PathUtils, run_backup, run_restore
-from .plugin_manager import PluginManager
+from .plugin_manager import PluginManager, PluginLoadReport
+from .plugin_hot_reload import PluginHotReloader
 
 __all__ = [
     "ConfigManager", 
@@ -15,5 +16,7 @@ __all__ = [
     "PathUtils", 
     "run_backup", 
     "run_restore",
-    "PluginManager"
+    "PluginManager",
+    "PluginLoadReport",
+    "PluginHotReloader",
 ]

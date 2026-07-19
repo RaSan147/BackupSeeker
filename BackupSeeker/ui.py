@@ -47,6 +47,7 @@ Dialog = _QDialog
 
 from .core import ConfigManager, GameProfile, PathUtils, clear_before_restore, run_restore
 from .plugin_manager import PluginManager
+from .plugin_runtime import PluginHookError, format_plugin_hook_error, run_plugin_hook
 from .ui_shared import (
 	confirm_action,
 	confirm_restore,
@@ -271,11 +272,19 @@ class PluginBrowserDialog(Dialog):
 
 	def _refresh_all_plugins(self) -> None:
 		self.list_widget.clear()
-		self.plugin_manager.load_plugins()
+		report = self.plugin_manager.reload_plugins(hot=True)
 		for plugin in self.plugin_manager.available_plugins.values():
 			item = QListWidgetItem(f"🎮 {plugin.game_name}")
 			item.setData(Qt.ItemDataRole.UserRole, plugin.game_id)
 			self.list_widget.addItem(item)
+		if not report.ok:
+			from .plugin_manager import format_load_report_verbose
+
+			QMessageBox.warning(
+				self,
+				"Plugin reload issues",
+				format_load_report_verbose(report),
+			)
 
 	def _on_search_clicked(self) -> None:
 		query = self.search_edit.text().strip().lower()
@@ -687,11 +696,20 @@ class MainWindow(QMainWindow):
 			return
 		profile_dict = profile.as_operation_dict(plugin)
 		if plugin is not None:
-			profile_dict = plugin.preprocess_backup(profile_dict)
+			try:
+				profile_dict = run_plugin_hook(plugin, "preprocess_backup", profile_dict)
+			except PluginHookError as e:
+				self.log(format_plugin_hook_error(e))
+				QMessageBox.critical(self, "Plugin error", format_plugin_hook_error(e))
+				return
 			if not profile.plugin_id:
 				profile.save_path = profile_dict.get("save_path", profile.save_path)
 		try:
 			dest = run_backup(profile, self.config, plugin)
+		except PluginHookError as e:
+			self.log(format_plugin_hook_error(e))
+			QMessageBox.critical(self, "Plugin error", format_plugin_hook_error(e))
+			return
 		except (RuntimeError, FileNotFoundError) as e:
 			msg = str(e)
 			self.log(f"Backup skipped: {msg}")
@@ -712,7 +730,11 @@ class MainWindow(QMainWindow):
 			return
 		result_data = {"backup_path": str(dest)}
 		if plugin is not None:
-			result_data = plugin.postprocess_backup(result_data)
+			try:
+				run_plugin_hook(plugin, "postprocess_backup", result_data)
+			except PluginHookError as e:
+				self.log(format_plugin_hook_error(e))
+				QMessageBox.warning(self, "Plugin postprocess warning", format_plugin_hook_error(e))
 		size_str = f"{dest.stat().st_size / 1024:.1f} KB"
 		self.log(f"SUCCESS: Saved to {dest.name} ({size_str})")
 		QMessageBox.information(self, "Backup", "Backup Successful!")
@@ -903,18 +925,31 @@ class MainWindow(QMainWindow):
 			return
 		profile_dict = self.current_profile.as_operation_dict(plugin)
 		if plugin is not None:
-			profile_dict = plugin.preprocess_restore(profile_dict)
+			try:
+				profile_dict = run_plugin_hook(plugin, "preprocess_restore", profile_dict)
+			except PluginHookError as e:
+				self.log(format_plugin_hook_error(e))
+				QMessageBox.critical(self, "Plugin error", format_plugin_hook_error(e))
+				return
 			if not self.current_profile.plugin_id:
 				self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
 		try:
 			run_restore(self.current_profile, self.config, fpath, clear_before_restore(plugin), plugin)
+		except PluginHookError as e:
+			self.log(format_plugin_hook_error(e))
+			QMessageBox.critical(self, "Plugin error", format_plugin_hook_error(e))
+			return
 		except Exception as e:
 			self.log(f"RESTORE ERROR: {e}")
 			QMessageBox.critical(self, "Error", str(e))
 			return
 		result_data = {"backup_path": str(fpath)}
 		if plugin is not None:
-			result_data = plugin.postprocess_restore(result_data)
+			try:
+				run_plugin_hook(plugin, "postprocess_restore", result_data)
+			except PluginHookError as e:
+				self.log(format_plugin_hook_error(e))
+				QMessageBox.warning(self, "Plugin postprocess warning", format_plugin_hook_error(e))
 		self.log("RESTORE COMPLETE")
 		QMessageBox.information(self, "Done", "Game Restored Successfully.")
 		self.refresh_backups()
