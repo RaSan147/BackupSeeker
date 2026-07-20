@@ -31,10 +31,8 @@ class DetroitBecomeHumanPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%USERPROFILE%/Saved Games/Quantic Dream/Detroit Become Human",
-					"%USERPROFILE%/OneDrive/Documents/Quantic Dream/Detroit Become Human",
 					"%USERPROFILE%/Documents/Quantic Dream/Detroit Become Human",
 					"%USERPROFILE%/Saved Games/Quantic Dream/DETROITPC_IND",
-					"%USERPROFILE%/OneDrive/Documents/Quantic Dream/DETROITPC_IND",
 					"%USERPROFILE%/Documents/Quantic Dream/DETROITPC_IND",
 				],
 			},

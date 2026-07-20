@@ -6,22 +6,21 @@ from .base import GamePlugin, auto_get_plugins
 from .save_sources import SAVE_KIND_DIRECTORY
 
 
-class HeavyRainPlugin(GamePlugin):
-	"""Heavy Rain — save game locations.
+class Cyberpunk2077Plugin(GamePlugin):
+	"""Cyberpunk 2077 — save game locations.
 
-	Saves are located in the user's Saved Games folder (with alternative folder name for Japanese version).
-	Supports OneDrive documents and Saved Games redirections.
+	Saves are located in the CD Projekt Red folder under Saved Games.
 	"""
 
 	version: str = "1.0.0"
 
 	@property
 	def game_id(self) -> str:
-		return "heavy_rain"
+		return "cyberpunk_2077"
 
 	@property
 	def game_name(self) -> str:
-		return "Heavy Rain"
+		return "Cyberpunk 2077"
 
 	@property
 	def save_sources(self) -> List[Dict[str, Any]]:
@@ -30,21 +29,23 @@ class HeavyRainPlugin(GamePlugin):
 				"id": "save_folder",
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
-					"%USERPROFILE%/Saved Games/HeavyRain",
-					"%USERPROFILE%/Saved Games/HeavyRainJP",
-					"%USERPROFILE%/Documents/HeavyRain",
-					"%USERPROFILE%/Documents/HeavyRainJP",
+					"%USERPROFILE%/Saved Games/CD Projekt Red/Cyberpunk 2077",
 				],
 			},
 		]
 
 	@property
 	def icon(self) -> str:
-		return "🌧️"
+		return "🦾"
 
 	@property
 	def poster(self) -> str:
-		return "https://upload.wikimedia.org/wikipedia/en/c/c1/Heavy_Rain_Cover_Art.jpg"
+		return "https://cdn.cloudflare.steamstatic.com/steam/apps/1091500/capsule_616x353.jpg"
+
+	@property
+	def is_disabled(self) -> bool:
+		"""DISABLED: This plugin is currently untested."""
+		return True
 
 
 def get_plugins():

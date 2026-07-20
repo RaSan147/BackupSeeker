@@ -898,41 +898,79 @@ def _gather_archive_rows(
 			)
 
 	if mechanical:
-		return mechanical, [], []
+		archive_rows = mechanical
+		hints = []
+		root_diagnostics = []
+	else:
+		if mechanical is not None and not allow_empty_mechanical_fallback:
+			raise RuntimeError("mechanical_collect_archive_rows returned no files.")
 
-	if mechanical is not None and not allow_empty_mechanical_fallback:
-		raise RuntimeError("mechanical_collect_archive_rows returned no files.")
+		archive_rows = []
+		hints = []
+		root_diagnostics = []
+		seen_roots: set[Tuple[str, Path]] = set()
+		walked_keys: set[str] = set()
+		for logical_key, contracted in locs:
+			key = zip_sanitized_key(logical_key, plugin)
+			root = PathUtils.expand(contracted)
+			hints.append(f"{logical_key}->{contracted}")
 
-	archive_rows: List[Tuple[str, Path, Path]] = []
-	hints: List[str] = []
-	root_diagnostics: List[str] = []
-	for logical_key, contracted in locs:
-		key = zip_sanitized_key(logical_key, plugin)
-		root = PathUtils.expand(contracted)
-		hints.append(f"{logical_key}->{contracted}")
-		if not root.exists():
-			root_diagnostics.append(
-				f"{logical_key}: folder does not exist ({contracted})"
-			)
-			continue
-		try:
-			files = collect_files_under(root, patterns, exclude_globs=exclude_globs)
-			root_res = root.resolve()
-		except OSError:
-			continue
-		for fpath in files:
-			try:
-				rel = fpath.relative_to(root_res)
-			except ValueError:
+			if key in walked_keys:
 				continue
-			archive_rows.append((key, fpath, rel))
-		if not files:
-			pat_hint = ", ".join(patterns) if patterns else "*"
-			root_diagnostics.append(
-				f"{logical_key}: folder exists but no files matched patterns [{pat_hint}] ({contracted})"
-			)
 
-	return archive_rows, hints, root_diagnostics
+			if not root.exists():
+				root_diagnostics.append(
+					f"{logical_key}: folder does not exist ({contracted})"
+				)
+				continue
+			try:
+				root_res = root.resolve()
+			except Exception:
+				root_res = root
+
+			if (key, root_res) in seen_roots:
+				continue
+			seen_roots.add((key, root_res))
+
+			try:
+				files = collect_files_under(root, patterns, exclude_globs=exclude_globs)
+			except OSError:
+				continue
+			for fpath in files:
+				try:
+					rel = fpath.relative_to(root_res)
+				except ValueError:
+					continue
+				archive_rows.append((key, fpath, rel))
+			
+			walked_keys.add(key)
+
+			if not files:
+				pat_hint = ", ".join(patterns) if patterns else "*"
+				root_diagnostics.append(
+					f"{logical_key}: folder exists but no files matched patterns [{pat_hint}] ({contracted})"
+				)
+
+	# Deduplicate archive_rows based on target arcname inside the ZIP archive.
+	# Keep the one with the latest modification time if duplicate names exist.
+	seen_arcnames: Dict[str, Tuple[Tuple[str, Path, Path], float]] = {}
+	for row in archive_rows:
+		key, fpath, rel = row
+		arcname = f"{key}/{rel.as_posix()}"
+		try:
+			mtime = fpath.stat().st_mtime
+		except Exception:
+			mtime = 0.0
+
+		if arcname in seen_arcnames:
+			_, existing_mtime = seen_arcnames[arcname]
+			if mtime > existing_mtime:
+				seen_arcnames[arcname] = (row, mtime)
+		else:
+			seen_arcnames[arcname] = (row, mtime)
+
+	deduped_rows = [val[0] for val in seen_arcnames.values()]
+	return deduped_rows, hints, root_diagnostics
 
 
 def _plugin_snapshot_and_registry(plugin: object | None) -> Tuple[Dict[str, Any], Dict[str, Any] | None]:
