@@ -11,67 +11,78 @@ from ..ui_helpers import is_app_dark
 # UI Constants & Helpers
 # ============================================================================
 
-# Card transparency - reduced for better UI clarity
-CARD_STYLE_SEMI = "RoundedCard{background: rgba(0,0,0,0.5);}"
-CARD_STYLE_TRANSPARENT = "RoundedCard{background: transparent;}"
+# Card and panel stylesheets for clean, bold modern UI (Hydra launcher aesthetic)
+CARD_STYLE_SEMI = "RoundedCard{background: #1e202e; border: 1px solid #2b2e42; border-radius: 10px;}"
+CARD_STYLE_TRANSPARENT = "RoundedCard{background: #1e202e; border: 1px solid #2b2e42; border-radius: 10px;}"
 
-# List/widget transparencies
+# List/widget styling
 LIST_STYLE_TRANSPARENT = (
-    "QListWidget{background: transparent; border:0;} "
-    "QListWidget::item{background: transparent;}"
+    "QListWidget{background: transparent; border:0; outline: none;} "
+    "QListWidget::item{background: transparent; border: 0; outline: none;}"
 )
 
 SCROLL_AREA_STYLE_TRANSPARENT = (
     "QScrollArea{background: transparent; border:0;} "
-    "QScrollArea QWidget{background:transparent}"
+    "QScrollArea > QWidget > QWidget{background:transparent}"
 )
 
 # Dim color for inactive/installed items
-DIM_COLOR = QColor("#9a9a9a")
+DIM_COLOR = QColor("#858b9c")
 DIM_BRUSH = QBrush(DIM_COLOR)
 
 
 class AdaptiveThemeStyles:
-    """Centralized adaptive colors/styles for dark and light themes."""
+    """Centralized adaptive colors/styles for dark and light themes (Hydra aesthetic)."""
 
     # Color palette separated by theme for clarity and easy adjustment
     COLORS = {
         'dark': {
-            'text_primary': '#f3f3f3',
-            'text_secondary': '#d3d3d3',
-            'text_muted': '#b8b8b8',
-            'badge_bg': 'rgba(255,255,255,0.25)',
-            'separator': 'rgba(255,255,255,0.14)',
-            'dim_color': '#b6b6b6',
-            'panel_bg': 'rgba(0, 0, 0, 0.64)',
-            'panel_border': 'rgba(255,255,255,0.12)',
-            'table_bg': 'rgba(0, 0, 0, 0.76)',
-            'table_border': 'rgba(255,255,255,0.14)',
-            'table_gridline': 'rgba(255,255,255,0.10)',
-            'table_header_bg': 'rgba(0, 0, 0, 0.88)',
-            'table_header_border': 'rgba(255,255,255,0.16)',
-            'table_alt_bg': 'rgba(255,255,255,0.04)',
-            'table_selection_bg': 'rgba(0,120,215,0.48)',
+            'bg_main': '#12131a',
+            'bg_surface': '#181a24',
+            'bg_card': '#1e202e',
+            'bg_card_hover': '#26293b',
+            'text_primary': '#ffffff',
+            'text_secondary': '#a0a6b8',
+            'text_muted': '#6e758a',
+            'badge_bg': '#2b2e42',
+            'separator': '#26293b',
+            'dim_color': '#858b9c',
+            'panel_bg': '#181a24',
+            'panel_border': '#2b2e42',
+            'table_bg': '#181a24',
+            'table_border': '#26293b',
+            'table_gridline': '#1f2230',
+            'table_header_bg': '#14151f',
+            'table_header_border': '#26293b',
+            'table_alt_bg': '#1b1d29',
+            'table_selection_bg': '#5b6cf9',
             'table_selection_text': '#ffffff',
+            'accent': '#5b6cf9',
+            'accent_hover': '#7180fa',
         },
         'light': {
-            'text_primary': '#1f1f1f',
-            'text_secondary': '#3f3f3f',
-            'text_muted': '#5f5f5f',
-            'badge_bg': 'rgba(0,0,0,0.14)',
-            'separator': 'rgba(0,0,0,0.12)',
-            'dim_color': '#6c6c6c',
-            'panel_bg': 'rgba(255, 255, 255, 0.86)',
-            'panel_border': 'rgba(0,0,0,0.16)',
-            'table_bg': 'rgba(255, 255, 255, 0.92)',
-            'table_border': 'rgba(0,0,0,0.14)',
-            'table_gridline': 'rgba(0,0,0,0.08)',
-            'table_header_bg': '#c5d0db',  # Distinct blue-gray header for clear visibility
-            'table_header_border': 'rgba(0,0,0,0.30)',    # Darker border
-
-            'table_alt_bg': 'rgba(0,0,0,0.03)',
-            'table_selection_bg': 'rgba(0,120,215,0.22)',
-            'table_selection_text': '#111111',
+            'bg_main': '#f4f5f9',
+            'bg_surface': '#ffffff',
+            'bg_card': '#ffffff',
+            'bg_card_hover': '#f0f2f8',
+            'text_primary': '#16171d',
+            'text_secondary': '#4f5466',
+            'text_muted': '#7c8296',
+            'badge_bg': '#e4e7f0',
+            'separator': '#e0e3ed',
+            'dim_color': '#6c7285',
+            'panel_bg': '#ffffff',
+            'panel_border': '#e0e3ed',
+            'table_bg': '#ffffff',
+            'table_border': '#e0e3ed',
+            'table_gridline': '#eceef5',
+            'table_header_bg': '#f0f2f8',
+            'table_header_border': '#d8dce8',
+            'table_alt_bg': '#fafbfe',
+            'table_selection_bg': '#4f46e5',
+            'table_selection_text': '#ffffff',
+            'accent': '#4f46e5',
+            'accent_hover': '#6366f1',
         }
     }
 
@@ -174,8 +185,8 @@ class AdaptiveThemeStyles:
             f"background-color: {t['table_bg']};"
             f"color: {t['text_primary']};"
             f"border: 1px solid {t['panel_border']};"
-            "border-radius: 6px;"
-            "padding: 8px;"
+            "border-radius: 8px;"
+            "padding: 10px 12px;"
             f"selection-background-color: {t['table_selection_bg']};"
             f"selection-color: {t['table_selection_text']};"
             "}"

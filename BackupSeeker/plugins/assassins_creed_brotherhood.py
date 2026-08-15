@@ -30,10 +30,6 @@ class AssassinsCreedBrotherhoodPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🦅"
-
-	@property
 	def poster(self) -> str:
 		return (
 			"https://upload.wikimedia.org/wikipedia/en/thumb/2/2a/"

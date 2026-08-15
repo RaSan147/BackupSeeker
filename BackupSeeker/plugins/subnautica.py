@@ -32,10 +32,6 @@ class SubnauticaPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🌊"
-
-	@property
 	def poster(self) -> str:
 		return "https://cdn.cloudflare.steamstatic.com/steam/apps/264710/capsule_616x353.jpg"
 

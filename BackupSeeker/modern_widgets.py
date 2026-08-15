@@ -109,17 +109,15 @@ class ModernTitleBar(SplitTitleBar):
 
         branding_layout = QHBoxLayout()
         branding_layout.setContentsMargins(15, 0, 0, 0)
-        branding_layout.setSpacing(10)
-
-        self.icon_label = QLabel("💾")
+        self.icon_label = QLabel()
         try:
-            self.icon_label.setStyleSheet("QLabel{font-size: 18px; background: transparent;}")
-            self.icon_label.setFixedSize(24, 24)
+            self.icon_label.setPixmap(FIF.SAVE.icon().pixmap(18, 18))
+            self.icon_label.setStyleSheet("QLabel{background: transparent;}")
+            self.icon_label.setFixedSize(20, 20)
         except Exception:
             pass
 
         self.title_label = StrongBodyLabel("BackupSeeker")
-        # Use palette-based color so the title responds to dark/light themes
         try:
             self.title_label.setStyleSheet("StrongBodyLabel{font-size: 14px; font-weight: bold; background: transparent; color: palette(windowText);}")
         except Exception:

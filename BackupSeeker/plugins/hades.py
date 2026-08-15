@@ -35,10 +35,6 @@ class HadesPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🔥"
-
-	@property
 	def poster(self) -> str:
 		return "https://cdn.cloudflare.steamstatic.com/steam/apps/1145360/capsule_616x353.jpg"
 

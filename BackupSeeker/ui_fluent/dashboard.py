@@ -262,9 +262,9 @@ class ModernDashboardInterface(QWidget):
         self.profile_header = QHBoxLayout()
         self.profile_header.setSpacing(8)
         self.profile_icon = QLabel("🎮")
-        self.profile_icon.setStyleSheet("QLabel{font-size: 22px;}")
+        self.profile_icon.setStyleSheet("QLabel{font-size: 22px; background: transparent; border: none;}")
         self.profile_name = StrongBodyLabel("Select a Game Profile")
-        self.profile_name.setStyleSheet("StrongBodyLabel{font-size: 16px;}")
+        self.profile_name.setStyleSheet("StrongBodyLabel{font-size: 16px; background: transparent; border: none;}")
         self.profile_name.setWordWrap(True)
 
         self.profile_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -648,12 +648,14 @@ class ModernDashboardInterface(QWidget):
 
     def _display_profile(self, profile: GameProfile):
         """Update sidebar header + responsive cover image for the selected profile."""
-        self.profile_name.setText(_profile_display_name(profile, self))
+        disp_name = _profile_display_name(profile, self)
+        self.profile_name.setText(disp_name)
+        self.profile_name.setToolTip(disp_name)
 
         icon_str = self._posters.icon_for(profile)
         if icon_str and is_emoji_icon(icon_str):
             self.profile_icon.setText(icon_str)
-            self.profile_icon.setStyleSheet("QLabel{font-size: 24px;}")
+            self.profile_icon.setStyleSheet("QLabel{font-size: 24px; background: transparent; border: none;}")
 
         self.backup_btn.setEnabled(True)
         self.restore_btn.setEnabled(True)

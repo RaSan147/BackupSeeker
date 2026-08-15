@@ -74,6 +74,7 @@ def apply_combo_ui_view(combo: QWidget, mode: str) -> None:
 
 def _install_read_only_table(table: TableWidget) -> None:
 	table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+	table.setWordWrap(False)
 
 
 def _make_details_text(

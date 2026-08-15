@@ -193,6 +193,10 @@ class PluginManager:
 		s.mount("http://", adapter)
 		return s
 
+	@property
+	def plugins(self) -> Dict[str, object]:
+		return self.available_plugins
+
 	def load_plugins(self) -> PluginLoadReport:
 		"""Reload all plugins (hot). Prefer :meth:`reload_plugins` for explicit control."""
 
@@ -747,8 +751,6 @@ class PluginManager:
 			return
 		gid = (getattr(plugin, "game_id", "") or "").strip() or "?"
 		if getattr(plugin, "_visual_assets_loaded", False):
-			if on_complete:
-				self._dispatch_on_main_thread(on_complete)
 			return
 
 		# Check if download or copy is actually needed

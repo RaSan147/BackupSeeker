@@ -51,11 +51,6 @@ class TemplatePlugin(GamePlugin):
             },
         ]
 
-    @property
-    def icon(self) -> str:
-        """Optional emoji or icon path for the game in the UI."""
-        return "🎮"
-
     def preprocess_backup(self, profile_data: dict) -> dict:
         # Example hook: run before the core backup. You can modify
         # `profile_data` to change `save_path`, `file_patterns`, etc.

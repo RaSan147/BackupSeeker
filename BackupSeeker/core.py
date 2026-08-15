@@ -423,6 +423,7 @@ class GameProfile:
 	plugin_version: str = ""
 	icon: str = ""  # Manual profiles only; plugin profiles use plugin assets
 	poster: str = ""
+	executable_path: str = ""
 
 	def __post_init__(self) -> None:
 		if self.file_patterns is None:
@@ -433,6 +434,8 @@ class GameProfile:
 			self.icon = ""
 		if self.poster is None:
 			self.poster = ""
+		if self.executable_path is None:
+			self.executable_path = ""
 
 	def editor_primary_path_display(self, plugin: object | None) -> str:
 		"""Initial text for the profile editor path row."""
@@ -536,6 +539,87 @@ class GameProfile:
 				return list(got)
 		return fp
 
+	def find_candidate_executables(self, plugin: object | None = None) -> List[str]:
+		"""Scan for candidate executable paths on the machine."""
+		candidates: List[str] = []
+		seen: set[str] = set()
+
+		def _add(path_str: str) -> None:
+			if not path_str:
+				return
+			try:
+				expanded = PathUtils.expand(path_str)
+				if expanded.is_file() and expanded.suffix.lower() == ".exe":
+					resolved = str(expanded.resolve())
+					if resolved not in seen:
+						seen.add(resolved)
+						candidates.append(resolved)
+				elif expanded.is_dir():
+					# Scan shallow for .exe
+					try:
+						for f in expanded.glob("*.exe"):
+							if f.is_file():
+								res = str(f.resolve())
+								if res not in seen:
+									seen.add(res)
+									candidates.append(res)
+					except OSError:
+						pass
+			except Exception:
+				pass
+
+		# 1. Configured executable
+		if self.executable_path:
+			_add(self.executable_path)
+
+		# 2. Registry paths from plugin
+		if plugin is not None:
+			pg = _pr.as_game_plugin(plugin)
+			if pg is not None and pg.registry_keys and winreg is not None:
+				for key_path, value_name in pg.registry_keys:
+					try:
+						hkey_str, _, sub_key = key_path.partition("\\")
+						hkey = _WINREG_HKEY_BY_NAME.get(hkey_str, winreg.HKEY_CURRENT_USER)
+						with winreg.OpenKey(hkey, sub_key) as key:
+							val, _ = winreg.QueryValueEx(key, value_name)
+							if isinstance(val, str) and val.strip():
+								_add(val.strip())
+					except Exception:
+						pass
+
+		# 3. Check save locations / pin parent directories for executables
+		for _, contracted in self.effective_save_locations(plugin):
+			try:
+				p = PathUtils.expand(contracted)
+				if p.exists():
+					curr = p if p.is_dir() else p.parent
+					# Check up to 3 parent levels
+					for _ in range(3):
+						_add(str(curr))
+						if curr.parent == curr:
+							break
+						curr = curr.parent
+			except Exception:
+				pass
+
+		return candidates
+
+	def launch_executable(self, exe_path: str | None = None) -> bool:
+		"""Launch the game executable."""
+		target = exe_path or self.executable_path
+		if not target:
+			return False
+		try:
+			expanded = PathUtils.expand(target)
+			if not expanded.exists() or not expanded.is_file():
+				return False
+			workdir = str(expanded.parent)
+			subprocess.Popen([str(expanded)], cwd=workdir, shell=False)
+			return True
+		except Exception as e:
+			logging.exception("Failed to launch game executable: %s", target)
+			return False
+
 	def as_operation_dict(self, plugin: object | None) -> Dict:
 		pv = (self.plugin_version or "").strip()
 		if not pv and plugin is not None:
@@ -557,6 +641,8 @@ class GameProfile:
 		common: Dict[str, Any] = {
 			"id": self.id,
 		}
+		if self.executable_path:
+			common["executable_path"] = self.executable_path
 		if self.plugin_id:
 			out = {**common, "plugin_id": self.plugin_id}
 			if (self.plugin_version or "").strip():
@@ -594,6 +680,7 @@ class GameProfile:
 
 		icon = data.get("icon", "") or ""
 		poster = data.get("poster", "") or ""
+		exe_path = (data.get("executable_path") or "").strip()
 
 		fp = data.get("file_patterns")
 		if not isinstance(fp, list) or not fp:
@@ -609,6 +696,7 @@ class GameProfile:
 			plugin_version=data.get("plugin_version", ""),
 			icon=icon,
 			poster=poster,
+			executable_path=exe_path,
 		)
 
 
@@ -909,14 +997,10 @@ def _gather_archive_rows(
 		hints = []
 		root_diagnostics = []
 		seen_roots: set[Tuple[str, Path]] = set()
-		walked_keys: set[str] = set()
 		for logical_key, contracted in locs:
 			key = zip_sanitized_key(logical_key, plugin)
 			root = PathUtils.expand(contracted)
 			hints.append(f"{logical_key}->{contracted}")
-
-			if key in walked_keys:
-				continue
 
 			if not root.exists():
 				root_diagnostics.append(
@@ -942,8 +1026,6 @@ def _gather_archive_rows(
 				except ValueError:
 					continue
 				archive_rows.append((key, fpath, rel))
-			
-			walked_keys.add(key)
 
 			if not files:
 				pat_hint = ", ".join(patterns) if patterns else "*"

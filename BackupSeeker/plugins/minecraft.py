@@ -35,10 +35,6 @@ class MinecraftPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "⛏️"
-
-	@property
 	def poster(self) -> str:
 		return "https://upload.wikimedia.org/wikipedia/en/5/51/Minecraft_cover_art.jpg"
 

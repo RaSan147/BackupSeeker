@@ -40,10 +40,6 @@ class StrayCodexDodiPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🐈"
-
-	@property
 	def poster(self) -> str:
 		return "https://upload.wikimedia.org/wikipedia/en/thumb/f/f1/Stray_cover_art.jpg/250px-Stray_cover_art.jpg"
 

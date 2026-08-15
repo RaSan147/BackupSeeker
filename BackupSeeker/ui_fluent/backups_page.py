@@ -138,7 +138,7 @@ class ModernBackupsInterface(QWidget):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.backups_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -306,7 +306,7 @@ class ModernBackupsInterface(QWidget):
                 self.backups_table.setItem(row, 3, arch_item)
                 item = QTableWidgetItem(r.get("filename", ""))
                 item.setData(Qt.ItemDataRole.UserRole, r.get("path_obj"))
-                item.setToolTip(r.get("archive_tooltip", ""))
+                item.setToolTip(r.get("filename", ""))
                 self.backups_table.setItem(row, 4, item)
 
                 # Actions widget

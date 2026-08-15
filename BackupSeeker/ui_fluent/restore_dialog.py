@@ -102,7 +102,7 @@ class RestoreBackupDialog(QDialog):
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.backups_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.backups_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -242,7 +242,7 @@ class RestoreBackupDialog(QDialog):
                 # Filename
                 item = QTableWidgetItem(file.name)
                 item.setData(Qt.ItemDataRole.UserRole, file)  # Store file path
-                item.setToolTip(arch_tip)
+                item.setToolTip(file.name)
                 self.backups_table.setItem(row, 4, item)
         
         # Toggle visibility
@@ -271,17 +271,17 @@ class RestoreBackupDialog(QDialog):
 
         # Type + icon (header)
         type_label = BodyLabel(backup_data.get("type", "Backup"))
-        type_label.setStyleSheet(f"BodyLabel{{font-weight: bold; font-size: 14px; color:{styles.text_primary()};}}")
+        type_label.setStyleSheet(f"BodyLabel{{font-weight: bold; font-size: 14px; color:{styles.text_primary()}; background: transparent; border: none;}}")
         card_layout.addWidget(type_label)
         
         # Date
         date_label = BodyLabel(backup_data.get("date", ""))
-        date_label.setStyleSheet(f"BodyLabel{{font-size: 12px; color: {styles.text_secondary()};}}")
+        date_label.setStyleSheet(f"BodyLabel{{font-size: 12px; color: {styles.text_secondary()}; background: transparent; border: none;}}")
         card_layout.addWidget(date_label)
         
         # Size
         size_label = CaptionLabel(backup_data.get("size", ""))
-        size_label.setStyleSheet(f"CaptionLabel{{color: {styles.text_muted()}; font-size: 11px;}}")
+        size_label.setStyleSheet(f"CaptionLabel{{color: {styles.text_muted()}; font-size: 11px; background: transparent; border: none;}}")
         card_layout.addWidget(size_label)
 
         arch = (backup_data.get("archive") or "").strip()
@@ -289,7 +289,7 @@ class RestoreBackupDialog(QDialog):
             arch_lbl = CaptionLabel(arch[:90] + ("…" if len(arch) > 90 else ""))
             arch_lbl.setToolTip(backup_data.get("archive_tooltip", "") or arch)
             arch_lbl.setStyleSheet(
-                f"CaptionLabel{{color: {styles.text_secondary()}; font-size: 11px;}}"
+                f"CaptionLabel{{color: {styles.text_secondary()}; font-size: 11px; background: transparent; border: none;}}"
             )
             arch_lbl.setWordWrap(True)
             card_layout.addWidget(arch_lbl)
@@ -297,7 +297,7 @@ class RestoreBackupDialog(QDialog):
         # Separator
         sep = QLabel()
         sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background: {styles.separator()};")
+        sep.setStyleSheet(f"background: {styles.separator()}; border: none;")
         card_layout.addWidget(sep)
         
         # Filename (truncated but more readable)
@@ -305,7 +305,7 @@ class RestoreBackupDialog(QDialog):
         if len(filename) > 35:
             filename = filename[:32] + "..."
         filename_label = CaptionLabel(filename)
-        filename_label.setStyleSheet(f"CaptionLabel{{color: {styles.text_secondary()}; font-size: 11px; font-family: monospace;}}")
+        filename_label.setStyleSheet(f"CaptionLabel{{color: {styles.text_secondary()}; font-size: 11px; font-family: monospace; background: transparent; border: none;}}")
         filename_label.setWordWrap(True)
         card_layout.addWidget(filename_label)
         

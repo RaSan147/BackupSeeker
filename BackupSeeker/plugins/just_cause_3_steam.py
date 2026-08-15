@@ -38,10 +38,6 @@ class JustCause3SteamPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🪂"
-
-	@property
 	def poster(self) -> str:
 		return "https://upload.wikimedia.org/wikipedia/en/thumb/f/f2/Just_Cause_3_cover_art.jpg/250px-Just_Cause_3_cover_art.jpg"
 

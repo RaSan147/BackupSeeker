@@ -32,10 +32,6 @@ class MonsterHunterWorldPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🦖"
-
-	@property
 	def poster(self) -> str:
 		return "https://cdn.cloudflare.steamstatic.com/steam/apps/582010/capsule_616x353.jpg"
 

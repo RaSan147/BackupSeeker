@@ -72,7 +72,6 @@ class TestNewPlugins(unittest.TestCase):
 				self.assertIsInstance(plugin, GamePlugin)
 				self.assertEqual(plugin.game_id, game_id)
 				self.assertTrue(len(plugin.game_name) > 0)
-				self.assertTrue(len(plugin.icon) > 0)
 				self.assertTrue(plugin.poster.startswith("http"))
 				self.assertTrue(len(plugin.save_sources) > 0)
 

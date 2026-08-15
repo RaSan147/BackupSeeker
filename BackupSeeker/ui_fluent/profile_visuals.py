@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QPainter, QPixmap
+from PyQt6.QtGui import QFont, QFontMetrics, QPainter, QPixmap
 from PyQt6.QtWidgets import QLabel, QWidget
 
 from ..core import GameProfile
@@ -141,7 +141,10 @@ class ProfilePosterService:
 		pm = self.plugin_manager()
 		plugin = resolve_plugin_for_profile(profile, self._widget)
 		if pm is not None and plugin is not None:
-			if queue_download:
+			saved = getattr(plugin, "_saved_poster", "")
+			if saved:
+				return saved
+			if queue_download and not getattr(plugin, "_visual_assets_loaded", False):
 				pm.ensure_plugin_visual_assets(plugin, on_complete)
 			saved = getattr(plugin, "_saved_poster", "")
 			if saved:
@@ -229,3 +232,44 @@ class ProfilePosterService:
 			allow_placeholder=allow_placeholder,
 			queue_download=False,
 		)
+
+
+def elide_multiline_text(text: str, font: QFont, max_width: int, max_lines: int = 2) -> str:
+	"""Wrap text across up to max_lines, appending '...' at the end of the last line if truncated."""
+	if not text:
+		return ""
+	fm = QFontMetrics(font)
+	words = text.split()
+	if not words:
+		return text
+
+	lines: list[str] = []
+	current_words: list[str] = []
+
+	for i, word in enumerate(words):
+		test_line = " ".join(current_words + [word])
+		if fm.horizontalAdvance(test_line) <= max_width:
+			current_words.append(word)
+		else:
+			if len(lines) + 1 >= max_lines:
+				# This is the last line; elide the remainder of the text with ellipsis
+				remaining = " ".join([word] + words[i + 1:])
+				full_candidate = (" ".join(current_words) + " " + remaining).strip()
+				elided = fm.elidedText(full_candidate, Qt.TextElideMode.ElideRight, max_width)
+				lines.append(elided)
+				current_words = []
+				break
+			else:
+				if current_words:
+					lines.append(" ".join(current_words))
+					current_words = [word]
+				else:
+					# Single word is wider than max_width
+					lines.append(fm.elidedText(word, Qt.TextElideMode.ElideRight, max_width))
+					current_words = []
+
+	if current_words:
+		lines.append(" ".join(current_words))
+
+	return "\n".join(lines)
+

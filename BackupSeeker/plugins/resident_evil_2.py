@@ -77,10 +77,6 @@ class ResidentEvil2Plugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🧟"
-
-	@property
 	def poster(self) -> str:
 		return (
 			"https://upload.wikimedia.org/wikipedia/en/f/fd/Resident_Evil_2_Remake.jpg"

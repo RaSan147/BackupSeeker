@@ -32,10 +32,6 @@ class DarkSouls3Plugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🔥"
-
-	@property
 	def poster(self) -> str:
 		return "https://cdn.cloudflare.steamstatic.com/steam/apps/374320/capsule_616x353.jpg"
 

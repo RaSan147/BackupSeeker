@@ -45,7 +45,12 @@ from .helpers import (
 )
 from ..fluent_window import resolve_plugin_for_profile, toast_parent
 from .poster_refresh import PosterRefreshCoordinator
-from .profile_visuals import POSTER_LABEL_NAME, ProfilePosterService, is_emoji_icon
+from .profile_visuals import (
+	POSTER_LABEL_NAME,
+	ProfilePosterService,
+	elide_multiline_text,
+	is_emoji_icon,
+)
 from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT
 
 
@@ -256,20 +261,23 @@ class ModernProfilesInterface(QWidget):
             "}"
         )
         ovl_layout = QVBoxLayout(title_overlay)
-        ovl_layout.setContentsMargins(10, 10, 10, 8)
+        ovl_layout.setContentsMargins(10, 10, 10, 10)
         ovl_layout.addStretch(1)
-        name_label = QLabel(_profile_display_name(profile, self))
+        full_display_name = _profile_display_name(profile, self)
+        name_label = QLabel()
         name_label.setStyleSheet(
-            "QLabel{font-weight:bold;font-size:13px;color:#ffffff !important;background:transparent;}"
+            "QLabel{font-weight:bold;font-size:13px;color:#ffffff !important;background:transparent;border:none;padding:0px;}"
         )
         name_label.setWordWrap(True)
+        name_label.setText(elide_multiline_text(full_display_name, name_label.font(), poster_size.width() - 20, max_lines=2))
+        name_label.setToolTip(full_display_name)
         ovl_layout.addWidget(name_label)
 
         icon_str = self._posters.icon_for(profile)
         if icon_str and is_emoji_icon(icon_str):
             badge = QLabel(icon_str, poster_container)
             badge.setStyleSheet(
-                f"QLabel{{font-size: 24px; background: {styles.badge_bg()}; padding: 6px; border-radius: 6px;}}"
+                f"QLabel{{font-size: 24px; background: {styles.badge_bg()}; padding: 6px; border-radius: 8px;}}"
             )
             badge.setFixedSize(48, 48)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -283,12 +291,12 @@ class ModernProfilesInterface(QWidget):
         info_container.setFixedWidth(poster_size.width())
         info_container.setStyleSheet(styles.info_panel_stylesheet("profileInfoPanel", radius=10))
         info_layout = QVBoxLayout(info_container)
-        info_layout.setContentsMargins(8, 6, 8, 8)
+        info_layout.setContentsMargins(10, 8, 10, 10)
         info_layout.setSpacing(4)
         
         # Info text (compressed)
         info_text = CaptionLabel()
-        info_text.setStyleSheet(f"CaptionLabel{{font-size: 10px; color:{styles.text_secondary()};}}")
+        info_text.setStyleSheet(f"CaptionLabel{{font-size: 11px; color:{styles.text_secondary()}; padding: 2px 2px;}}")
         info_lines = [last_backup_label(profile, self, self.config, date_fmt="%Y-%m-%d")]
         
         info_text.setText(" | ".join(info_lines))

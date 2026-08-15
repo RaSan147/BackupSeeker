@@ -30,10 +30,6 @@ class AssassinsCreed3Plugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "⚔️"  # Swords emoji fits the theme
-
-	@property
 	def poster(self) -> str:
 		return "https://upload.wikimedia.org/wikipedia/en/2/29/Assassin%27s_Creed_III_Game_Cover.jpg"
 

@@ -39,10 +39,6 @@ class HeavyRainPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "🌧️"
-
-	@property
 	def poster(self) -> str:
 		return "https://upload.wikimedia.org/wikipedia/en/c/c1/Heavy_Rain_Cover_Art.jpg"
 

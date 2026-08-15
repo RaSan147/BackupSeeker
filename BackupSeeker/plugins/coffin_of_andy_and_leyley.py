@@ -33,10 +33,6 @@ class CoffinOfAndyAndLeyleyPlugin(GamePlugin):
 		]
 
 	@property
-	def icon(self) -> str:
-		return "⚰️"
-
-	@property
 	def poster(self) -> str:
 		return "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2378900/capsule_616x353.jpg"
 
