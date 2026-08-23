@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
-from typing import Any, Sequence, Tuple
+from typing import Any
 
 from ..core import PathUtils
 
 
-def normalize_validations(raw: Any) -> Tuple[str, ...]:
+def normalize_validations(raw: Any) -> tuple[str, ...]:
 	"""Normalize ``prompt.validations`` from string, comma-string, or list into lowercase tags."""
 
 	if raw is None:
@@ -29,7 +30,7 @@ def normalize_validations(raw: Any) -> Tuple[str, ...]:
 	return ()
 
 
-def validate_restore_input(kind: str, raw: str, validations: Sequence[str]) -> Tuple[bool, str]:
+def validate_restore_input(kind: str, raw: str, validations: Sequence[str]) -> tuple[bool, str]:
 	"""Return ``(ok, error_message)``. Empty ``error_message`` means success with nothing to show."""
 
 	vals = {str(v).strip().lower() for v in validations if str(v).strip()}

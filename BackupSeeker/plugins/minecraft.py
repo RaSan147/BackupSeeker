@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from .base import GamePlugin, auto_get_plugins
 from .save_sources import SAVE_KIND_DIRECTORY
 
 
 class MinecraftPlugin(GamePlugin):
-	"""Minecraft — save game locations.
+	"""Minecraft - save game locations.
 
-	Saves are located under AppData/Roaming/.minecraft/saves.
+	Supports Java Edition, Bedrock (Windows Store) Edition, and modded launchers.
+	Save path references verified on PCGamingWiki.
 	"""
 
-	version: str = "1.0.0"
+	version: str = "2.0.0"
 
 	@property
 	def game_id(self) -> str:
@@ -23,25 +24,29 @@ class MinecraftPlugin(GamePlugin):
 		return "Minecraft"
 
 	@property
-	def save_sources(self) -> List[Dict[str, Any]]:
+	def save_sources(self) -> list[dict[str, Any]]:
 		return [
 			{
-				"id": "save_folder",
+				"id": "minecraft_java_saves",
+				"label": "Minecraft Java Edition Saves",
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%APPDATA%/.minecraft/saves",
+				],
+			},
+			{
+				"id": "minecraft_bedrock_worlds",
+				"label": "Minecraft Bedrock (UWP) Worlds",
+				"kind": SAVE_KIND_DIRECTORY,
+				"paths": [
+					"%LOCALAPPDATA%/Packages/Microsoft.MinecraftUWP_8wekyb3d8bbwe/LocalState/games/com.mojang/minecraftWorlds",
 				],
 			},
 		]
 
 	@property
 	def poster(self) -> str:
-		return "https://upload.wikimedia.org/wikipedia/en/5/51/Minecraft_cover_art.jpg"
-
-	@property
-	def is_disabled(self) -> bool:
-		"""DISABLED: This plugin is currently untested."""
-		return True
+		return "https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc66m7.jpg"
 
 
 def get_plugins():

@@ -9,13 +9,13 @@ For a ``directory`` entry, the ``prompt`` object may include ``example`` (a samp
 path string) shown next to the main ``message`` in the GUI and portable stdin flow.
 Optional ``editor_label`` / ``editor_placeholder`` customize the profile-editor path row.
 
-``prompt.validations``: list (or comma-separated string) of tags —
+``prompt.validations``: list (or comma-separated string) of tags - 
 ``must`` / ``required``, ``optional``, ``string``, ``int``, ``decimal``
 (applied after ``input_kind``, e.g. folder path vs text).
 
 ``prompt.candidacy`` (defaults with ``prompt.when``): ``no_candidate_exists`` (skip prompt if any
 local ``paths`` exists), ``no_candidate_this_or_ids`` (skip if this entry **or**
-``candidacy_any_of_ids`` has a candidate), ``always`` (never skip—always prompt until filled).
+``candidacy_any_of_ids`` has a candidate), ``always`` (never skip - always prompt until filled).
 
 ``prompt.candidacy_any_of_ids``: list of other ``directory`` ``id`` values for OR semantics.
 
@@ -24,7 +24,8 @@ Bundle snapshots embed ``save_sources`` only (no legacy ``save_locations`` / ``r
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 SAVE_KIND_DIRECTORY = "directory"
 SAVE_KIND_REGISTRY_WINDOWS = "registry_windows"
@@ -34,10 +35,10 @@ CANDIDACY_NO_CANDIDATE_THIS_OR_IDS = "no_candidate_this_or_ids"
 CANDIDACY_ALWAYS = "always"
 
 
-def flatten_locations_from_sources(sources: Sequence[Dict[str, Any]]) -> List[Tuple[str, str]]:
+def flatten_locations_from_sources(sources: Sequence[dict[str, Any]]) -> list[tuple[str, str]]:
 	"""Expand ``directory`` entries to ``(id, contracted_path)`` rows (alternatives repeat ``id``)."""
 
-	out: List[Tuple[str, str]] = []
+	out: list[tuple[str, str]] = []
 	for entry in sources:
 		if entry.get("kind") != SAVE_KIND_DIRECTORY:
 			continue
@@ -49,12 +50,12 @@ def flatten_locations_from_sources(sources: Sequence[Dict[str, Any]]) -> List[Tu
 	return out
 
 
-def flatten_paths_from_sources(sources: Sequence[Dict[str, Any]]) -> List[str]:
+def flatten_paths_from_sources(sources: Sequence[dict[str, Any]]) -> list[str]:
 	return [p for _, p in flatten_locations_from_sources(sources)]
 
 
-def registry_pairs_from_sources(sources: Sequence[Dict[str, Any]]) -> List[Tuple[str, str]]:
-	out: List[Tuple[str, str]] = []
+def registry_pairs_from_sources(sources: Sequence[dict[str, Any]]) -> list[tuple[str, str]]:
+	out: list[tuple[str, str]] = []
 	for entry in sources:
 		if entry.get("kind") != SAVE_KIND_REGISTRY_WINDOWS:
 			continue
@@ -65,7 +66,7 @@ def registry_pairs_from_sources(sources: Sequence[Dict[str, Any]]) -> List[Tuple
 	return out
 
 
-def sources_from_plugin_dict(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def sources_from_plugin_dict(data: dict[str, Any]) -> list[dict[str, Any]]:
 	"""Normalize JSON(C) ``save_sources`` into validated entries."""
 
 	raw = data.get("save_sources")
@@ -74,12 +75,15 @@ def sources_from_plugin_dict(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 	return [_normalize_source_entry(e) for e in raw if isinstance(e, dict)]
 
 
-def _normalize_source_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_source_entry(entry: dict[str, Any]) -> dict[str, Any]:
 	kind = str(entry.get("kind") or SAVE_KIND_DIRECTORY).strip() or SAVE_KIND_DIRECTORY
-	base: Dict[str, Any] = {"kind": kind}
+	base: dict[str, Any] = {"kind": kind}
 	eid = str(entry.get("id") or "").strip()
 	if eid:
 		base["id"] = eid
+	lbl = str(entry.get("label") or entry.get("name") or "").strip()
+	if lbl:
+		base["label"] = lbl
 	if kind == SAVE_KIND_DIRECTORY:
 		paths = entry.get("paths")
 		if isinstance(paths, list):

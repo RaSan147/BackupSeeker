@@ -4,13 +4,13 @@ try:
 	import winreg
 except Exception:  # pragma: no cover - non-Windows environments
 	winreg = None
+import inspect
+import logging
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-import inspect
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple
-
-import logging
+from typing import TYPE_CHECKING, Any
 
 from ..core import PathUtils, zip_sanitized_key
 from .prompt_validation import normalize_validations
@@ -40,9 +40,9 @@ class RestoreInputSpec:
 	kind: str = "existing_directory"
 	example: str = ""
 	label: str = ""
-	validations: Tuple[str, ...] = ()
+	validations: tuple[str, ...] = ()
 	candidacy: str = PROMPT_WHEN_NO_CANDIDATE
-	candidacy_any_of_ids: Tuple[str, ...] = ()
+	candidacy_any_of_ids: tuple[str, ...] = ()
 
 
 class GamePlugin(ABC):
@@ -77,7 +77,7 @@ class GamePlugin(ABC):
 
 	@property
 	@abstractmethod
-	def save_sources(self) -> List[Dict[str, Any]]:
+	def save_sources(self) -> list[dict[str, Any]]:
 		"""Declarative list of dicts: directory roots, registry probes, optional prompts.
 
 		See :mod:`BackupSeeker.plugins.save_sources`. Derived APIs:
@@ -85,23 +85,23 @@ class GamePlugin(ABC):
 		"""
 
 	@property
-	def save_locations(self) -> List[Tuple[str, str]]:
+	def save_locations(self) -> list[tuple[str, str]]:
 		"""Flattened ``(logical id, contracted path)`` from ``directory`` sources only."""
 
 		return flatten_locations_from_sources(self.save_sources)
 
 	@property
-	def save_paths(self) -> List[str]:
+	def save_paths(self) -> list[str]:
 		"""All directory candidate paths in schema order."""
 
 		return flatten_paths_from_sources(self.save_sources)
 
 	@property
-	def file_patterns(self) -> List[str]:
+	def file_patterns(self) -> list[str]:
 		return ["*"]
 
 	@property
-	def registry_keys(self) -> List[Tuple[str, str]]:
+	def registry_keys(self) -> list[tuple[str, str]]:
 		return registry_pairs_from_sources(self.save_sources)
 
 	@property
@@ -111,13 +111,13 @@ class GamePlugin(ABC):
 		return False
 
 	@property
-	def zip_key_aliases(self) -> Dict[str, str]:
+	def zip_key_aliases(self) -> dict[str, str]:
 		"""Optional logical_key → short tag for ZIP folder names (passed through ``sanitize_location_key``)."""
 
 		return {}
 
 	@property
-	def backup_exclude_globs(self) -> List[str]:
+	def backup_exclude_globs(self) -> list[str]:
 		"""Glob patterns (relative POSIX paths) excluded from backup walks."""
 
 		return []
@@ -140,11 +140,11 @@ class GamePlugin(ABC):
 
 		return False
 
-	def save_detection_groups(self) -> List[Tuple[str, List[str]]]:
-		"""``(logical_key, paths…)`` — one group per ``directory`` source ``id``."""
+	def save_detection_groups(self) -> list[tuple[str, list[str]]]:
+		"""``(logical_key, paths…)`` - one group per ``directory`` source ``id``."""
 
-		order: List[str] = []
-		buckets: Dict[str, List[str]] = {}
+		order: list[str] = []
+		buckets: dict[str, list[str]] = {}
 		for lk, p in self.save_locations:
 			s = (p or "").strip()
 			if not s:
@@ -155,10 +155,10 @@ class GamePlugin(ABC):
 			buckets[lk].append(s)
 		return [(k, buckets[k]) for k in order]
 
-	def iter_detection_contracted_paths(self) -> List[str]:
+	def iter_detection_contracted_paths(self) -> list[str]:
 		"""Flatten :meth:`save_detection_groups` (same order as grouped ``save_locations``)."""
 
-		out: List[str] = []
+		out: list[str] = []
 		for _, plist in self.save_detection_groups():
 			out.extend(plist)
 		return out
@@ -181,7 +181,7 @@ class GamePlugin(ABC):
 		except OSError:
 			return False
 
-	def _contracted_save_root_from_pin_entry(self, entry: Dict[str, Any], raw_pin: str) -> Optional[str]:
+	def _contracted_save_root_from_pin_entry(self, entry: dict[str, Any], raw_pin: str) -> str | None:
 		"""Expand a user-entered contracted path pin to the effective save root.
 
 		If ``directory`` entry includes ``pin_relative_segments`` (POSIX-ish names under the pin),
@@ -239,7 +239,7 @@ class GamePlugin(ABC):
 
 	# --- Optional lifecycle hooks (override as needed) ---
 
-	def preprocess_backup(self, profile_data: Dict) -> Dict:
+	def preprocess_backup(self, profile_data: dict) -> dict:
 		"""Hook called before a backup starts.
 
 		Can mutate and return a new profile dict (e.g. tweak save_path
@@ -248,7 +248,7 @@ class GamePlugin(ABC):
 
 		return profile_data
 
-	def postprocess_backup(self, result_data: Dict) -> Dict:
+	def postprocess_backup(self, result_data: dict) -> dict:
 		"""Hook called after a backup finishes successfully.
 
 		Can add metadata, verify results, etc.
@@ -256,12 +256,12 @@ class GamePlugin(ABC):
 
 		return result_data
 
-	def preprocess_restore(self, profile_data: Dict) -> Dict:
+	def preprocess_restore(self, profile_data: dict) -> dict:
 		"""Hook called before restore starts."""
 
 		return profile_data
 
-	def postprocess_restore(self, result_data: Dict) -> Dict:
+	def postprocess_restore(self, result_data: dict) -> dict:
 		"""Hook called after restore completes."""
 
 		return result_data
@@ -301,7 +301,6 @@ class GamePlugin(ABC):
 		
 		for key_path, value_name in self.registry_keys:
 			try:
-				# Map string to HKEY constants (e.g., "HKEY_LOCAL_MACHINE" -> winreg.HKEY_LOCAL_MACHINE)
 				hkey_str, _, sub_key = key_path.partition('\\')
 				hkey = (
 					winreg.HKEY_CLASSES_ROOT if hkey_str == "HKEY_CLASSES_ROOT"
@@ -311,18 +310,64 @@ class GamePlugin(ABC):
 					else winreg.HKEY_CURRENT_USER
 				)
 				
-				with winreg.OpenKey(hkey, sub_key) as key:
-					install_path, _ = winreg.QueryValueEx(key, value_name)
-					if install_path and Path(install_path).exists():
-						return True
+				# Try default, 32-bit (WOW6432Node), and 64-bit registry views
+				masks = [winreg.KEY_READ]
+				if hasattr(winreg, "KEY_WOW64_32KEY"):
+					masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+				if hasattr(winreg, "KEY_WOW64_64KEY"):
+					masks.append(winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+
+				for access_mask in masks:
+					try:
+						with winreg.OpenKey(hkey, sub_key, 0, access_mask) as key:
+							install_path, _ = winreg.QueryValueEx(key, value_name)
+							if install_path:
+								p = Path(str(install_path).strip().strip('"'))
+								if p.exists():
+									return True
+					except (FileNotFoundError, OSError):
+						continue
 			except (FileNotFoundError, OSError, AttributeError, TypeError):
-				# Normal behavior: key or value doesn't exist, or invalid format
-				# Use debug level to avoid log spam during normal discovery
 				continue
 		
 		return False
 
-	def get_detected_path(self) -> Optional[str]:
+	def get_detected_install_path(self) -> Path | None:
+		"""Return the detected game installation root directory if available on the current machine."""
+		if winreg is not None:
+			for key_path, value_name in self.registry_keys:
+				try:
+					hkey_str, _, sub_key = key_path.partition("\\")
+					hkey = (
+						winreg.HKEY_CLASSES_ROOT if hkey_str == "HKEY_CLASSES_ROOT"
+						else winreg.HKEY_LOCAL_MACHINE if hkey_str == "HKEY_LOCAL_MACHINE"
+						else winreg.HKEY_USERS if hkey_str == "HKEY_USERS"
+						else winreg.HKEY_CURRENT_CONFIG if hkey_str == "HKEY_CURRENT_CONFIG"
+						else winreg.HKEY_CURRENT_USER
+					)
+					masks = [winreg.KEY_READ]
+					if hasattr(winreg, "KEY_WOW64_32KEY"):
+						masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+					if hasattr(winreg, "KEY_WOW64_64KEY"):
+						masks.append(winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+
+					for access_mask in masks:
+						try:
+							with winreg.OpenKey(hkey, sub_key, 0, access_mask) as key:
+								val, _ = winreg.QueryValueEx(key, value_name)
+								if val:
+									p = Path(str(val).strip().strip('"'))
+									if p.is_file():
+										return p.parent
+									if p.is_dir():
+										return p
+						except (FileNotFoundError, OSError):
+							continue
+				except Exception:
+					continue
+		return None
+
+	def get_detected_path(self) -> str | None:
 		"""Return the first `save_paths` entry that exists on disk, or None.
 
 		The returned value is the *contracted* form (e.g. contains environment
@@ -344,7 +389,7 @@ class GamePlugin(ABC):
 		# Fallback to first path even if it doesn't exist
 		return paths[0] if paths else None
 
-	def get_detected_paths(self) -> List[str]:
+	def get_detected_paths(self) -> list[str]:
 		"""Return all `save_paths` entries that exist on disk.
 		
 		Useful for games that split saves across multiple locations.
@@ -363,14 +408,479 @@ class GamePlugin(ABC):
 
 	@staticmethod
 	def get_codex_path(app_id: str) -> str:
-		"""Generate CODEX save path for a game given its Steam AppID.
-		
-		Example:
-			get_codex_path("1332010") -> "%PUBLIC%/Documents/Steam/CODEX/1332010/remote"
-		"""
+		"""Generate CODEX save path for a game given its Steam AppID."""
 		return f"%PUBLIC%/Documents/Steam/CODEX/{app_id}/remote"
 
-	def to_profile(self) -> Dict:
+	@staticmethod
+	def get_tenoke_path(app_id: str) -> str:
+		"""Generate TENOKE save path for a game given its Steam AppID."""
+		return f"%PUBLIC%/Documents/Steam/TENOKE/{app_id}"
+
+	@staticmethod
+	def get_goldberg_path(app_id: str, subfolder: str = "remote") -> str:
+		"""Generate Goldberg Steam emulator save path for a given Steam AppID."""
+		sub = f"/{subfolder.strip('/')}" if subfolder.strip("/") else ""
+		return f"%APPDATA%/Goldberg SteamEmu Saves/{app_id}{sub}"
+
+	@staticmethod
+	def get_goldberg_uplay_path(ubisoft_id: str) -> str:
+		"""Generate Goldberg Uplay emulator save path for a given Ubisoft Game ID."""
+		return f"%APPDATA%/Goldberg UplayEmu Saves/{ubisoft_id}"
+
+	@staticmethod
+	def get_goldberg_social_club_path(game_name: str) -> str:
+		"""Generate Goldberg Social Club emulator save path for Rockstar titles."""
+		return f"%APPDATA%/Goldberg SocialClubEmu Saves/{game_name}"
+
+	@staticmethod
+	def get_gse_path(app_id: str) -> str:
+		"""Generate GSE / Hydra saves path for a given Steam AppID."""
+		return f"%APPDATA%/GSE Saves/{app_id}"
+
+	@staticmethod
+	def get_rune_path(app_id: str, subfolder: str = "remote") -> str:
+		"""Generate RUNE save path for a given Steam AppID."""
+		sub = f"/{subfolder.strip('/')}" if subfolder.strip("/") else ""
+		return f"%APPDATA%/RUNE/{app_id}{sub}"
+
+	@staticmethod
+	def get_flt_path(app_id: str, subfolder: str = "remote") -> str:
+		"""Generate FairLight (FLT) save path for a given Steam AppID."""
+		sub = f"/{subfolder.strip('/')}" if subfolder.strip("/") else ""
+		return f"%APPDATA%/FLT/{app_id}{sub}"
+
+	@staticmethod
+	def get_empress_path(app_id: str, subfolder: str = "remote") -> str:
+		"""Generate EMPRESS save path for a given Steam AppID."""
+		sub = f"/{subfolder.strip('/')}" if subfolder.strip("/") else ""
+		return f"%APPDATA%/EMPRESS/{app_id}{sub}"
+
+	@staticmethod
+	def get_cpy_path(app_id: str) -> str:
+		"""Generate CPY save path for a given Steam AppID."""
+		return f"%USERPROFILE%/Documents/CPY_SAVES/Player/{app_id}"
+
+	@staticmethod
+	def get_steam_install_path() -> Path | None:
+		"""Return the detected Steam install directory if available on Windows."""
+		if winreg is not None:
+			for hive, subkey, val_name in [
+				(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath"),
+				(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+				(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", "InstallPath"),
+			]:
+				try:
+					with winreg.OpenKey(hive, subkey) as k:
+						val, _ = winreg.QueryValueEx(k, val_name)
+						if val:
+							p = Path(str(val))
+							if p.exists() and p.is_dir():
+								return p
+				except Exception:
+					pass
+		for default_path in [
+			r"%PROGRAMFILES(X86)%/Steam",
+			r"%PROGRAMFILES%/Steam",
+			r"%LOCALAPPDATA%/Steam",
+		]:
+			try:
+				exp = PathUtils.expand(default_path)
+				if exp.exists() and exp.is_dir():
+					return exp
+			except Exception:
+				pass
+		return None
+
+	@classmethod
+	def get_steam_library_paths(cls) -> list[Path]:
+		"""Parse Steam's libraryfolders.vdf to find all Steam library root folders across all drives."""
+		steam_root = cls.get_steam_install_path()
+		if not steam_root:
+			return []
+
+		libraries: list[Path] = [steam_root]
+		vdf_path = steam_root / "steamapps" / "libraryfolders.vdf"
+		if not vdf_path.exists():
+			vdf_path = steam_root / "config" / "config.vdf"
+
+		if vdf_path.exists():
+			try:
+				import re
+				with open(vdf_path, "r", encoding="utf-8", errors="ignore") as f:
+					content = f.read()
+				for match in re.finditer(r'"path"\s*"([^"]+)"', content, re.IGNORECASE):
+					raw_p = match.group(1).replace("\\\\", "\\")
+					lib_p = Path(raw_p)
+					if lib_p.exists() and lib_p.is_dir() and lib_p not in libraries:
+						libraries.append(lib_p)
+			except Exception:
+				pass
+
+		return libraries
+
+	@classmethod
+	def get_steam_app_install_path(cls, app_id: str) -> Path | None:
+		"""Return the exact installation path of a Steam game given its AppID by checking app manifests."""
+		import re
+		app_id_str = str(app_id).strip()
+		manifest_name = f"appmanifest_{app_id_str}.acf"
+
+		for lib in cls.get_steam_library_paths():
+			manifest_file = lib / "steamapps" / manifest_name
+			if manifest_file.exists():
+				try:
+					with open(manifest_file, "r", encoding="utf-8", errors="ignore") as f:
+						content = f.read()
+					m_install = re.search(r'"installdir"\s*"([^"]+)"', content, re.IGNORECASE)
+					if m_install:
+						folder_name = m_install.group(1).strip()
+						game_dir = lib / "steamapps" / "common" / folder_name
+						if game_dir.exists() and game_dir.is_dir():
+							return game_dir
+				except Exception:
+					pass
+
+		# Fallback: check Windows registry for Steam App uninstaller
+		if winreg is not None:
+			for sub_key in (
+				rf"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {app_id_str}",
+				rf"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {app_id_str}",
+			):
+				masks = [winreg.KEY_READ]
+				if hasattr(winreg, "KEY_WOW64_32KEY"):
+					masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+				for access in masks:
+					try:
+						with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key, 0, access) as k:
+							val, _ = winreg.QueryValueEx(k, "InstallLocation")
+							if val:
+								p = Path(str(val).strip().strip('"'))
+								if p.exists() and p.is_dir():
+									return p
+					except Exception:
+						continue
+		return None
+
+	@classmethod
+	def is_steam_app_installed(cls, app_id: str) -> bool:
+		"""Check whether a Steam app is installed on the machine."""
+		return cls.get_steam_app_install_path(app_id) is not None
+
+	@classmethod
+	def get_gog_install_path(cls, gog_id: str) -> Path | None:
+		"""Query GOG registry to find the game installation directory."""
+		if winreg is None:
+			return None
+		gog_id_str = str(gog_id).strip()
+		subkeys = [
+			rf"SOFTWARE\GOG.com\Games\{gog_id_str}",
+			rf"SOFTWARE\WOW6432Node\GOG.com\Games\{gog_id_str}",
+			rf"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{gog_id_str}_is1",
+			rf"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{gog_id_str}_is1",
+		]
+		for sub_key in subkeys:
+			masks = [winreg.KEY_READ]
+			if hasattr(winreg, "KEY_WOW64_32KEY"):
+				masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+			for access in masks:
+				try:
+					with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key, 0, access) as k:
+						for val_name in ("path", "InstallLocation", "PATH", "workingDir"):
+							try:
+								val, _ = winreg.QueryValueEx(k, val_name)
+								if val:
+									p = Path(str(val).strip().strip('"'))
+									if p.exists() and p.is_dir():
+										return p
+							except Exception:
+								continue
+				except Exception:
+					continue
+		return None
+
+	@classmethod
+	def get_epic_install_path(cls, *app_names: str) -> Path | None:
+		"""Query Epic Games Launcher manifests to retrieve the installation directory."""
+		import json
+		manifest_dir = PathUtils.expand("%PROGRAMDATA%/Epic/EpicGamesLauncher/Data/Manifests")
+		if not manifest_dir.exists() or not manifest_dir.is_dir():
+			return None
+
+		search_set = {n.strip().lower() for n in app_names if n.strip()}
+		try:
+			for item_file in manifest_dir.glob("*.item"):
+				try:
+					with open(item_file, "r", encoding="utf-8", errors="ignore") as f:
+						data = json.load(f)
+					app_name = str(data.get("AppName") or "").strip().lower()
+					disp_name = str(data.get("DisplayName") or "").strip().lower()
+					main_name = str(data.get("MainGameAppName") or "").strip().lower()
+					if app_name in search_set or disp_name in search_set or main_name in search_set:
+						inst_loc = data.get("InstallLocation")
+						if inst_loc:
+							p = Path(str(inst_loc).strip().strip('"'))
+							if p.exists() and p.is_dir():
+								return p
+				except Exception:
+					continue
+		except Exception:
+			pass
+		return None
+
+	@classmethod
+	def get_ubisoft_install_path(cls, ubisoft_id: str) -> Path | None:
+		"""Query Ubisoft Connect registry keys for game installation directory."""
+		if winreg is None:
+			return None
+		u_id = str(ubisoft_id).strip()
+		subkeys = [
+			rf"SOFTWARE\Ubisoft\Launcher\Installs\{u_id}",
+			rf"SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\{u_id}",
+		]
+		for sub_key in subkeys:
+			masks = [winreg.KEY_READ]
+			if hasattr(winreg, "KEY_WOW64_32KEY"):
+				masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+			for access in masks:
+				try:
+					with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key, 0, access) as k:
+						val, _ = winreg.QueryValueEx(k, "InstallDir")
+						if val:
+							p = Path(str(val).strip().strip('"'))
+							if p.exists() and p.is_dir():
+								return p
+				except Exception:
+					continue
+		return None
+
+	@classmethod
+	def get_ubisoft_save_paths(cls, ubisoft_id: str) -> list[str]:
+		"""Find Ubisoft Game Launcher save directories for a given game ID."""
+		out: list[str] = []
+		u_id = str(ubisoft_id).strip()
+		root_dir = PathUtils.expand("%LOCALAPPDATA%/Ubisoft Game Launcher/savegames")
+		if root_dir.exists() and root_dir.is_dir():
+			try:
+				for account_dir in root_dir.iterdir():
+					if account_dir.is_dir():
+						game_save_dir = account_dir / u_id
+						if game_save_dir.exists() and game_save_dir.is_dir():
+							out.append(PathUtils.contract(str(game_save_dir)))
+			except Exception:
+				pass
+		if not out:
+			out.append(f"%LOCALAPPDATA%/Ubisoft Game Launcher/savegames/*/{u_id}")
+		return out
+
+	@classmethod
+	def get_steam_userdata_paths(cls, app_id: str, subfolder: str = "remote") -> list[str]:
+		"""Scan and return existing Steam userdata save directories for a given AppID."""
+		out: list[str] = []
+		steam_dir = cls.get_steam_install_path()
+		if not steam_dir:
+			return out
+		userdata_dir = steam_dir / "userdata"
+		if not userdata_dir.exists() or not userdata_dir.is_dir():
+			return out
+		try:
+			for user_folder in userdata_dir.iterdir():
+				if not user_folder.is_dir() or user_folder.name in ("0", "anonymous"):
+					continue
+				app_save_dir = user_folder / str(app_id) / subfolder if subfolder else user_folder / str(app_id)
+				if app_save_dir.exists() and app_save_dir.is_dir():
+					out.append(PathUtils.contract(str(app_save_dir)))
+		except Exception:
+			pass
+		return out
+
+	@classmethod
+	def get_all_steam_save_paths(cls, app_id: str, subfolder: str = "remote") -> list[str]:
+		"""Return candidate save paths across Steam userdata and all major emulators."""
+		paths: list[str] = []
+		paths.extend(cls.get_steam_userdata_paths(app_id, subfolder))
+		paths.append(cls.get_codex_path(app_id))
+		paths.append(cls.get_tenoke_path(app_id))
+		paths.append(cls.get_goldberg_path(app_id, subfolder))
+		paths.append(cls.get_gse_path(app_id))
+		paths.append(cls.get_rune_path(app_id, subfolder))
+		paths.append(cls.get_flt_path(app_id, subfolder))
+		paths.append(cls.get_empress_path(app_id, subfolder))
+		paths.append(cls.get_cpy_path(app_id))
+		return paths
+
+	@classmethod
+	def get_named_steam_emulator_sources(cls, app_id: str, subfolder: str = "remote") -> list[dict[str, Any]]:
+		"""Return distinct, named save source entries for Steam userdata and all major emulators."""
+		sources: list[dict[str, Any]] = []
+
+		# 1. Official Steam Userdata
+		steam_paths = cls.get_steam_userdata_paths(app_id, subfolder)
+		steam_root = cls.get_steam_install_path()
+		fallback_paths: list[str] = []
+		if steam_paths:
+			fallback_paths = steam_paths
+		elif steam_root:
+			fallback_paths = [PathUtils.contract(str(steam_root / "userdata" / "default" / str(app_id) / subfolder)).rstrip("/\\")]
+		else:
+			fallback_paths = [f"%PROGRAMFILES(X86)%/Steam/userdata/default/{app_id}/{subfolder}".rstrip("/\\")]
+
+		sources.append({
+			"id": "steam_userdata",
+			"label": "Steam Official (userdata)",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": fallback_paths,
+		})
+
+		# 2. CODEX / DODI Repack
+		sources.append({
+			"id": "codex_dodi",
+			"label": "CODEX / DODI Repack",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_codex_path(app_id)],
+		})
+
+		# 3. TENOKE Repack
+		sources.append({
+			"id": "tenoke",
+			"label": "TENOKE Repack",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_tenoke_path(app_id), f"{cls.get_tenoke_path(app_id)}/remote"],
+		})
+
+		# 4. Goldberg Steam Emulator
+		sources.append({
+			"id": "goldberg_emu",
+			"label": "Goldberg Steam Emulator",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_goldberg_path(app_id, subfolder)],
+		})
+
+		# 5. GSE / Hydra
+		sources.append({
+			"id": "gse_hydra",
+			"label": "GSE / Hydra Saves",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_gse_path(app_id)],
+		})
+
+		# 6. RUNE Repack
+		sources.append({
+			"id": "rune",
+			"label": "RUNE Repack",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_rune_path(app_id, subfolder)],
+		})
+
+		# 7. FairLight (FLT) Repack
+		sources.append({
+			"id": "flt",
+			"label": "FairLight (FLT) Repack",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_flt_path(app_id, subfolder)],
+		})
+
+		# 8. EMPRESS Repack
+		sources.append({
+			"id": "empress",
+			"label": "EMPRESS Repack",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [
+				cls.get_empress_path(app_id, subfolder),
+				f"%PUBLIC%/Documents/EMPRESS/{app_id}/{subfolder}".rstrip("/\\"),
+			],
+		})
+
+		# 9. CPY Repack
+		sources.append({
+			"id": "cpy",
+			"label": "CPY Repack",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [
+				cls.get_cpy_path(app_id),
+				f"%USERPROFILE%/Documents/CPY_SAVES/{app_id}",
+			],
+		})
+
+		return sources
+
+	@classmethod
+	def get_unity_install_path_from_log(cls, company: str, product: str) -> Path | None:
+		"""Inspect Unity's Player.log, Player-prev.log, or output_log.txt to extract the game install folder.
+
+		Searches for Mono/IL2CPP paths logged by the Unity engine on launch:
+		- ``Mono path[0] = '<Install>/<DataDir>/Managed'``
+		- ``Mono config path = '<Install>/MonoBleedingEdge/etc'``
+		- ``Loading player data from <Install>/<DataDir>/data.unity3d``
+		- ``[Subsystems] Discovering subsystems at path <Install>/<DataDir>/...``
+		Returns the extracted Path if parsed, or None.
+		"""
+		import re
+
+		def _extract_install_root(raw_path_str: str) -> Path | None:
+			raw = Path(raw_path_str.strip().strip("'\""))
+			for candidate in [raw, *raw.parents]:
+				if candidate.name.endswith("_Data") or candidate.name == "MonoBleedingEdge":
+					return candidate.parent
+			if len(raw.parents) >= 2:
+				return raw.parents[1]
+			return raw.parent if raw.parent != raw else None
+
+		log_dir = PathUtils.expand(f"%USERPROFILE%/AppData/LocalLow/{company}/{product}")
+		if not log_dir.exists() or not log_dir.is_dir():
+			return None
+
+		for log_name in ("Player.log", "Player-prev.log", "output_log.txt"):
+			log_path = log_dir / log_name
+			if not log_path.exists() or not log_path.is_file():
+				continue
+			try:
+				with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+					for _ in range(200):
+						line = f.readline()
+						if not line:
+							break
+						m_mono = re.search(r"Mono path\[0\]\s*=\s*'([^']+)'", line)
+						if m_mono:
+							root = _extract_install_root(m_mono.group(1))
+							if root:
+								return root
+						m_cfg = re.search(r"Mono config path\s*=\s*'([^']+)'", line)
+						if m_cfg:
+							root = _extract_install_root(m_cfg.group(1))
+							if root:
+								return root
+						m_data = re.search(r"Loading player data from\s+(.+)", line)
+						if m_data:
+							root = _extract_install_root(m_data.group(1))
+							if root:
+								return root
+						m_sub = re.search(r"\[Subsystems\] Discovering subsystems at path\s+(.+)", line)
+						if m_sub:
+							root = _extract_install_root(m_sub.group(1))
+							if root:
+								return root
+			except Exception:
+				continue
+		return None
+
+	@classmethod
+	def is_unity_game_installed(cls, company: str, product: str) -> bool | None:
+		"""Check whether a Unity game is installed by verifying the path logged in Player.log.
+
+		Returns:
+			True if Player.log exists and the referenced install directory exists on disk.
+			False if Player.log exists with an install path that no longer exists on disk.
+			None if no Player.log could be found or parsed.
+		"""
+		install_path = cls.get_unity_install_path_from_log(company, product)
+		if install_path is not None:
+			try:
+				return install_path.exists() and install_path.is_dir()
+			except Exception:
+				return False
+		return None
+
+	def to_profile(self) -> dict:
 		"""Return fields for adding a profile; config stores only references.
 
 		Display metadata lives on the plugin; persisted rows keep ``plugin_id``
@@ -387,18 +897,18 @@ class GamePlugin(ABC):
 
 		return "mechanical_python"
 
-	def mechanical_finalize_bundle(self, bundle: Dict[str, Any]) -> Dict[str, Any]:
+	def mechanical_finalize_bundle(self, bundle: dict[str, Any]) -> dict[str, Any]:
 		"""Optional last edit to the bundle dict before write (metadata, extra keys)."""
 
 		return bundle
 
 	def mechanical_collect_archive_rows(
 		self,
-		profile_dict: Dict[str, Any],
+		profile_dict: dict[str, Any],
 		*,
-		patterns: List[str],
-		exclude_globs: List[str],
-	) -> Optional[List[Tuple[str, Path, Path]]]:
+		patterns: list[str],
+		exclude_globs: list[str],
+	) -> list[tuple[str, Path, Path]] | None:
 		"""Return ``None`` for default directory walk; else explicit archive rows."""
 
 		return None
@@ -410,11 +920,11 @@ class GamePlugin(ABC):
 		m = str(pr.get("when") or "").strip()
 		return m or PROMPT_WHEN_NO_CANDIDATE
 
-	def _directory_entry_has_disk_candidate(self, entry: Dict[str, Any]) -> bool:
+	def _directory_entry_has_disk_candidate(self, entry: dict[str, Any]) -> bool:
 		paths = [str(x).strip() for x in (entry.get("paths") or []) if str(x).strip()]
 		return bool(paths) and any(self._contracted_dir_exists(p) for p in paths)
 
-	def _should_omit_restore_prompt(self, entry: Dict[str, Any], pr: Mapping[str, Any]) -> bool:
+	def _should_omit_restore_prompt(self, entry: dict[str, Any], pr: Mapping[str, Any]) -> bool:
 		"""True → skip this prompt in :meth:`restore_input_specs` (disk / policy satisfied)."""
 
 		mode = self._prompt_mode(pr)
@@ -439,7 +949,7 @@ class GamePlugin(ABC):
 			return self._directory_entry_has_disk_candidate(entry)
 		return False
 
-	def _restore_spec_from_prompt_entry(self, entry: Dict[str, Any], pr: Mapping[str, Any]) -> Optional[RestoreInputSpec]:
+	def _restore_spec_from_prompt_entry(self, entry: dict[str, Any], pr: Mapping[str, Any]) -> RestoreInputSpec | None:
 		if not isinstance(pr, dict):
 			return None
 		ik = str(pr.get("input_key") or "").strip()
@@ -466,10 +976,10 @@ class GamePlugin(ABC):
 			candidacy_any_of_ids=c_any,
 		)
 
-	def restore_input_specs(self) -> List[RestoreInputSpec]:
+	def restore_input_specs(self) -> list[RestoreInputSpec]:
 		"""Prompts from ``directory`` entries subject to ``prompt.candidacy`` / ``prompt.when``."""
 
-		specs: List[RestoreInputSpec] = []
+		specs: list[RestoreInputSpec] = []
 		for entry in self.save_sources:
 			if entry.get("kind") != SAVE_KIND_DIRECTORY:
 				continue
@@ -484,10 +994,10 @@ class GamePlugin(ABC):
 			specs.append(spec)
 		return specs
 
-	def restore_input_specs_for_review(self) -> List[RestoreInputSpec]:
+	def restore_input_specs_for_review(self) -> list[RestoreInputSpec]:
 		"""Same definitions as :meth:`restore_input_specs`, but ignores on-disk omit rules (GUI review)."""
 
-		specs: List[RestoreInputSpec] = []
+		specs: list[RestoreInputSpec] = []
 		for entry in self.save_sources:
 			if entry.get("kind") != SAVE_KIND_DIRECTORY:
 				continue
@@ -500,7 +1010,7 @@ class GamePlugin(ABC):
 			specs.append(spec)
 		return specs
 
-	def primary_path_editor_hints(self) -> Optional[Tuple[str, str]]:
+	def primary_path_editor_hints(self) -> tuple[str, str] | None:
 		"""Optional ``(heading, placeholder)`` for the profile-editor path row from ``save_sources`` prompts."""
 
 		pk_raw = self.profile_primary_input_key()
@@ -521,7 +1031,7 @@ class GamePlugin(ABC):
 				return (lb, ph)
 		return None
 
-	def profile_primary_input_key(self) -> Optional[str]:
+	def profile_primary_input_key(self) -> str | None:
 		"""First ``prompt.input_key`` under a ``directory`` entry (persisted as ``plugin_inputs[input_key]``).
 
 		Use the same string as that entry's ``id`` when the profile pins a folder for that root.
@@ -538,7 +1048,7 @@ class GamePlugin(ABC):
 				return ik
 		return None
 
-	def profile_restore_input_values(self, profile: GameProfile) -> Dict[str, str]:
+	def profile_restore_input_values(self, profile: GameProfile) -> dict[str, str]:
 		"""Values for ``restore_input_specs`` keys stored on the profile (single primary pin by default)."""
 
 		pk_raw = self.profile_primary_input_key()
@@ -559,11 +1069,11 @@ class GamePlugin(ABC):
 		else:
 			profile.plugin_inputs.pop(key, None)
 
-	def save_locations_for_profile(self, profile: GameProfile) -> Optional[List[Tuple[str, str]]]:
+	def save_locations_for_profile(self, profile: GameProfile) -> list[tuple[str, str]] | None:
 		"""Derive save roots from ``plugin_inputs`` using ``directory`` ``id`` keys and optional ``pin_relative_segments``."""
 
 		pi = getattr(profile, "plugin_inputs", None) or {}
-		out: List[Tuple[str, str]] = []
+		out: list[tuple[str, str]] = []
 		for entry in self.save_sources:
 			if entry.get("kind") != SAVE_KIND_DIRECTORY:
 				continue
@@ -576,10 +1086,10 @@ class GamePlugin(ABC):
 				out.append((eid, cp))
 		return out if out else None
 
-	def bundle_root_overrides_from_restore_inputs(self, inputs: Mapping[str, str]) -> Optional[Dict[str, str]]:
+	def bundle_root_overrides_from_restore_inputs(self, inputs: Mapping[str, str]) -> dict[str, str] | None:
 		"""Map bundle ZIP ``sanitized_key`` → contracted save root from stdin/GUI inputs (declarative)."""
 
-		out: Dict[str, str] = {}
+		out: dict[str, str] = {}
 		for entry in self.save_sources:
 			if entry.get("kind") != SAVE_KIND_DIRECTORY:
 				continue
@@ -604,12 +1114,11 @@ class GamePlugin(ABC):
 			ctx.apply_bundle_root_paths(overrides)
 		ctx.run_default_file_and_registry()
 
-	def mechanical_after_app_restore(self, info: Dict[str, Any]) -> None:
+	def mechanical_after_app_restore(self, info: dict[str, Any]) -> None:
 		"""Called after a successful GUI restore (files + optional registry)."""
 
-		pass
 
-	def to_snapshot_dict(self) -> Dict[str, Any]:
+	def to_snapshot_dict(self) -> dict[str, Any]:
 		"""JSON-safe subset embedded in bundle.json (no executable hook code)."""
 
 		return {
@@ -624,20 +1133,20 @@ class GamePlugin(ABC):
 			"backup_exclude_globs": list(self.backup_exclude_globs or []),
 		}
 
-	def extra_readme_lines(self) -> List[str]:
+	def extra_readme_lines(self) -> list[str]:
 		"""Extra lines appended to archive README (short plugin-specific notes)."""
 
 		return []
 
 
-def plugin_from_json(data: Dict) -> GamePlugin:
+def plugin_from_json(data: dict) -> GamePlugin:
 	"""Create a simple data-driven plugin from a JSONC-like descriptor.
 
 	Requires ``save_sources`` (list of dicts); see :mod:`BackupSeeker.plugins.save_sources`.
 	"""
 
 	class JsonGamePlugin(GamePlugin):
-		def __init__(self, d: Dict) -> None:
+		def __init__(self, d: dict) -> None:
 			self._data = d
 
 		@property
@@ -657,11 +1166,11 @@ def plugin_from_json(data: Dict) -> GamePlugin:
 			return self._data["name"]
 
 		@property
-		def save_sources(self) -> List[Dict[str, Any]]:
+		def save_sources(self) -> list[dict[str, Any]]:
 			return sources_from_plugin_dict(self._data)
 
 		@property
-		def file_patterns(self) -> List[str]:
+		def file_patterns(self) -> list[str]:
 			return self._data.get("file_patterns", ["*"])
 
 		@property
@@ -669,12 +1178,12 @@ def plugin_from_json(data: Dict) -> GamePlugin:
 			return bool(self._data.get("backup_registry_values", False))
 
 		@property
-		def zip_key_aliases(self) -> Dict[str, str]:
+		def zip_key_aliases(self) -> dict[str, str]:
 			raw = self._data.get("zip_key_aliases")
 			return {str(k): str(v) for k, v in raw.items()} if isinstance(raw, dict) else {}
 
 		@property
-		def backup_exclude_globs(self) -> List[str]:
+		def backup_exclude_globs(self) -> list[str]:
 			raw = self._data.get("backup_exclude_globs")
 			return [str(x) for x in raw] if isinstance(raw, list) else []
 
@@ -694,7 +1203,11 @@ def plugin_from_json(data: Dict) -> GamePlugin:
 		def icon(self) -> str:
 			return self._data.get("icon", "")
 
-		def extra_readme_lines(self) -> List[str]:
+		@property
+		def poster(self) -> str:
+			return self._data.get("poster", "")
+
+		def extra_readme_lines(self) -> list[str]:
 			raw = self._data.get("readme_extra_lines")
 			if isinstance(raw, list):
 				return [str(x) for x in raw if str(x).strip()]
@@ -703,7 +1216,7 @@ def plugin_from_json(data: Dict) -> GamePlugin:
 	return JsonGamePlugin(data)
 
 
-def auto_get_plugins():
+def auto_get_plugins() -> list[GamePlugin]:
 	"""Auto-discover and return all GamePlugin subclasses in the calling module.
 	
 	Use in plugin files instead of manually implementing get_plugins():
@@ -720,13 +1233,14 @@ def auto_get_plugins():
 		return []
 	
 	caller_module_name = frame.f_back.f_globals['__name__']
-	caller_locals = frame.f_back.f_locals
 	
-	# Find all GamePlugin subclasses defined in the caller's module
-	plugins = [
-		cls() for cls in GamePlugin.__subclasses__()
-		if cls.__module__ == caller_module_name
+	# Find all concrete GamePlugin subclasses defined in the caller's module
+	plugins: list[GamePlugin] = [
+		cls()  # type: ignore[abstract]
+		for cls in GamePlugin.__subclasses__()
+		if cls.__module__ == caller_module_name and not inspect.isabstract(cls)
 	]
 	
 	return plugins
+
 

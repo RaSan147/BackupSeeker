@@ -5,13 +5,11 @@ from typing import Any
 from .base import GamePlugin, auto_get_plugins
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
-_STEAM_APP_ID = "374320"
 
+class StrayPlugin(GamePlugin):
+	"""Stray - Windows save locations.
 
-class DarkSouls3Plugin(GamePlugin):
-	"""Dark Souls III - save game locations.
-
-	Supports official Steam, CODEX, Goldberg, GSE, RUNE, and other emulators.
+	Supports official Steam, native Unreal / GOG, CODEX, DODI, Goldberg, GSE, RUNE, and FLT.
 	Save path references verified on PCGamingWiki.
 	"""
 
@@ -19,35 +17,33 @@ class DarkSouls3Plugin(GamePlugin):
 
 	@property
 	def game_id(self) -> str:
-		return "dark_souls_3"
+		return "stray"
 
 	@property
 	def game_name(self) -> str:
-		return "Dark Souls III"
+		return "Stray"
 
 	@property
 	def save_sources(self) -> list[dict[str, Any]]:
 		sources: list[dict[str, Any]] = [
 			{
 				"kind": SAVE_KIND_REGISTRY_WINDOWS,
-				"key_path": rf"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {_STEAM_APP_ID}",
+				"key_path": r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 1332010",
 				"value_name": "InstallLocation",
 			},
 			{
-				"id": "appdata_darksouls3",
-				"label": "Dark Souls III AppData Saves",
+				"id": "unreal_native",
+				"label": "Unreal / GOG Native Saves",
 				"kind": SAVE_KIND_DIRECTORY,
-				"paths": [
-					"%APPDATA%/DarkSoulsIII",
-				],
+				"paths": ["%LOCALAPPDATA%/Hk_project/Saved/SaveGames"],
 			},
 		]
-		sources.extend(self.get_named_steam_emulator_sources(_STEAM_APP_ID))
+		sources.extend(self.get_named_steam_emulator_sources("1332010"))
 		return sources
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/374320/capsule_616x353.jpg"
+		return "https://cdn.cloudflare.steamstatic.com/steam/apps/1332010/capsule_616x353.jpg"
 
 
 def get_plugins():

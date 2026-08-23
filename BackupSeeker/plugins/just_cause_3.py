@@ -5,25 +5,25 @@ from typing import Any
 from .base import GamePlugin, auto_get_plugins
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
-_STEAM_APP_ID = "2244210"
+_STEAM_APP_ID = "225540"
 
 
-class SwordArtOnlineEchoesOfAincradPlugin(GamePlugin):
-	"""Sword Art Online: Echoes of Aincrad - save game locations.
+class JustCause3Plugin(GamePlugin):
+	"""Just Cause 3 - Windows save locations.
 
-	Saves (.sav files) are located in %LOCALAPPDATA%/EchoesofAincrad/Saved/SaveGames.
+	Supports official Steam, Square Enix Documents layout, CPY, CODEX, and other emulators.
 	Save path references verified on PCGamingWiki.
 	"""
 
-	version: str = "2.0.0"
+	version: str = "2.1.0"
 
 	@property
 	def game_id(self) -> str:
-		return "sword_art_online_echoes_of_aincrad"
+		return "just_cause_3"
 
 	@property
 	def game_name(self) -> str:
-		return "Sword Art Online: Echoes of Aincrad"
+		return "Just Cause 3"
 
 	@property
 	def save_sources(self) -> list[dict[str, Any]]:
@@ -34,11 +34,12 @@ class SwordArtOnlineEchoesOfAincradPlugin(GamePlugin):
 				"value_name": "InstallLocation",
 			},
 			{
-				"id": "unreal_saved_games",
-				"label": "Unreal Engine SaveGames",
+				"id": "square_enix_docs",
+				"label": "Square Enix Documents Saves",
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
-					"%LOCALAPPDATA%/EchoesofAincrad/Saved/SaveGames",
+					"%USERPROFILE%/Documents/Square Enix/Just Cause 3/Saves",
+					"%USERPROFILE%/Documents/My Games/Just Cause 3/Saves",
 				],
 			},
 		]
@@ -47,7 +48,7 @@ class SwordArtOnlineEchoesOfAincradPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2244210/25fb6350451b21ca824562c8d1eebe89091347cc/header.jpg"
+		return "https://cdn.cloudflare.steamstatic.com/steam/apps/225540/capsule_616x353.jpg"
 
 
 def get_plugins():
