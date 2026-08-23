@@ -29,7 +29,7 @@ _process_plugin_poster() -> _process_plugin_asset("poster", ...)
 - Updated `from_dict()` to deserialize poster
 - **Result:** GameProfile and GamePlugin now have parallel structure
 
-### 3. Fluent UI (`BackupSeeker/ui_fluent/`) — layout and semantics
+### 3. Fluent UI (`BackupSeeker/ui_fluent/`) - layout and semantics
 The Fluent UI is a **package** (`BackupSeeker/ui_fluent/`), not a single module. Entrypoints include [`app_runner.py`](BackupSeeker/ui_fluent/app_runner.py) (`run_modern_fluent_app`), [`main_window.py`](BackupSeeker/ui_fluent/main_window.py), and page modules (`dashboard.py`, `profiles_page.py`, etc.); [`fluent_impl.py`](BackupSeeker/ui_fluent/fluent_impl.py) re-exports the public API.
 
 **Semantics (icon vs poster):**

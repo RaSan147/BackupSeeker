@@ -1,11 +1,11 @@
-from unittest.mock import MagicMock
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock
 
-from BackupSeeker.plugins.base import GamePlugin, plugin_from_json
-from BackupSeeker.plugins.TEMPLATE_PLUGIN import TemplatePlugin
-from BackupSeeker.plugins.detroit_become_human import DetroitBecomeHumanPlugin
 from BackupSeeker.plugin_manager import PluginManager
+from BackupSeeker.plugins.base import plugin_from_json
+from BackupSeeker.plugins.detroit_become_human import DetroitBecomeHumanPlugin
+from BackupSeeker.plugins.TEMPLATE_PLUGIN import TemplatePlugin
 
 
 class TestPluginTemplate(unittest.TestCase):

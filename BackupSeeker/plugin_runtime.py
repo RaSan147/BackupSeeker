@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import traceback
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def clear_folder_on_restore(plugin: object | None) -> bool:
 	return bool(p.clear_folder_on_restore)
 
 
-def backup_exclude_globs(plugin: object) -> List[str]:
+def backup_exclude_globs(plugin: object) -> list[str]:
 	p = _gp(plugin)
 	if p is None:
 		return []
@@ -110,10 +110,10 @@ def backup_exclude_globs(plugin: object) -> List[str]:
 
 def mechanical_collect_archive_rows(
 	plugin: object,
-	profile_dict: Dict[str, Any],
+	profile_dict: dict[str, Any],
 	*,
-	patterns: List[str],
-	exclude_globs: List[str],
+	patterns: list[str],
+	exclude_globs: list[str],
 ):
 	p = _gp(plugin)
 	if p is None:
@@ -132,7 +132,7 @@ def mechanical_collect_archive_rows(
 		raise err from exc
 
 
-def call_to_snapshot_dict(plugin: object) -> Dict[str, Any]:
+def call_to_snapshot_dict(plugin: object) -> dict[str, Any]:
 	p = _gp(plugin)
 	if p is None:
 		return {}
@@ -144,7 +144,7 @@ def call_to_snapshot_dict(plugin: object) -> Dict[str, Any]:
 		return {}
 
 
-def mechanical_finalize_bundle(plugin: object, bundle_body: Dict[str, Any]) -> Dict[str, Any]:
+def mechanical_finalize_bundle(plugin: object, bundle_body: dict[str, Any]) -> dict[str, Any]:
 	p = _gp(plugin)
 	if p is None:
 		return bundle_body
@@ -162,7 +162,7 @@ def mechanical_finalize_bundle(plugin: object, bundle_body: Dict[str, Any]) -> D
 		raise err from exc
 
 
-def extra_readme_lines(plugin: object) -> List[str]:
+def extra_readme_lines(plugin: object) -> list[str]:
 	p = _gp(plugin)
 	if p is None:
 		return []
@@ -172,11 +172,11 @@ def extra_readme_lines(plugin: object) -> List[str]:
 		return []
 
 
-def registry_export_pairs(plugin: object) -> List[Tuple[str, str]]:
+def registry_export_pairs(plugin: object) -> list[tuple[str, str]]:
 	p = _gp(plugin)
 	if p is None or not p.backup_registry_values:
 		return []
-	out: List[Tuple[str, str]] = []
+	out: list[tuple[str, str]] = []
 	for item in p.registry_keys or []:
 		if isinstance(item, (tuple, list)) and len(item) >= 2:
 			out.append((str(item[0]), str(item[1])))
@@ -188,7 +188,7 @@ def embed_arc_basename(plugin: object) -> str:
 	return s if s else "plugin"
 
 
-def mechanical_after_app_restore(plugin: object, info: Dict[str, Any]) -> None:
+def mechanical_after_app_restore(plugin: object, info: dict[str, Any]) -> None:
 	p = _gp(plugin)
 	if p is None:
 		return

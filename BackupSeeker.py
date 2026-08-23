@@ -8,9 +8,6 @@ the Fluent-mode UI in a separate Python process. This keeps the GUI in a
 clean interpreter instance while preserving the existing module entry.
 """
 
-import os
-import subprocess
-import sys
 import traceback
 
 if __name__ == "__main__":

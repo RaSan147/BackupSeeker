@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .format_registry import CURRENT_ARCHIVE_FORMAT as BUNDLE_FORMAT_VERSION
+from .format_registry import CURRENT_ARCHIVE_FORMAT as BUNDLE_FORMAT_VERSION  # noqa: F401
 
 BACKUP_DIR_PREFIX = "_backupseeker/"
 BACKUP_BUNDLE_PATH = "_backupseeker/bundle.json"

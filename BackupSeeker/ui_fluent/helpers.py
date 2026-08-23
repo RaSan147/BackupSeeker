@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import html
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QAbstractItemView, QAbstractScrollArea, QWidget
@@ -81,7 +81,7 @@ def _make_details_text(
 	detail_body: str = "Not selected",
 	storage: str = "Not set",
 	status: str = "Waiting",
-	detail_title: Optional[str] = "Save location",
+	detail_title: str | None = "Save location",
 	*,
 	include_storage: bool = True,
 ) -> str:
@@ -122,19 +122,21 @@ def _make_transparent_widget(widget: QWidget) -> None:
 			vp.setStyleSheet("background: transparent;")
 
 
-def format_verify_report_text(report: Dict[str, Any]) -> str:
-	lines: List[str] = []
+def format_verify_report_text(report: dict[str, Any]) -> str:
+	lines: list[str] = []
 	lines.append("Save locations")
 	lines.append("-" * 44)
 	for row in report.get("locations") or []:
 		if not isinstance(row, dict):
 			continue
 		key = row.get("logical_key", "?")
+		label = (row.get("label") or "").strip()
+		tag = f"{label} [{key}]" if label and label != key else f"[{key}]"
 		ex = row.get("expanded_path", "")
 		exists = row.get("exists", False)
 		nf = row.get("file_count", 0)
 		flag = "OK" if row.get("has_data") else ("missing/empty" if not exists else "empty")
-		lines.append(f"  [{key}] {flag} | files: {nf}")
+		lines.append(f"  {tag} {flag} | files: {nf}")
 		lines.append(f"      {ex}")
 
 	lines.append("")
@@ -148,7 +150,7 @@ def format_verify_report_text(report: Dict[str, Any]) -> str:
 			if not isinstance(row, dict):
 				continue
 			ok = row.get("present_and_valid", False)
-			flag = "OK" if ok else "—"
+			flag = "OK" if ok else "-"
 			lines.append(f"  [{flag}] {row.get('key_path','')} :: {row.get('value_name','')}")
 			detail = row.get("detail", "")
 			if detail:

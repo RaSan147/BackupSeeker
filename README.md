@@ -1,4 +1,4 @@
-**BackupSeeker — Game Save Manager**
+**BackupSeeker - Game Save Manager**
 ===================================
 
 BackupSeeker is a lightweight, modular manager for creating, restoring, and safely archiving PC game save data. It combines a small testable core with a PyQt6 desktop UI and a flexible plugin system for game detection.
@@ -31,14 +31,14 @@ BackupSeeker creates timestamped ZIP archives of game save folders and provides 
 - Declarative `save_sources` (directories, registry probes, prompts) with lifecycle hooks for backup/restore extensions.
 
 **Architecture (key files)**
-- `BackupSeeker/core.py` — core logic, `GameProfile`, backup/restore orchestration.
-- `BackupSeeker/main.py` — entry: Fluent UI when imports succeed, else legacy `BackupSeeker.ui.run_app`.
-- `BackupSeeker/ui_fluent/` — Fluent UI (PyQt6-Fluent-Widgets): `app_runner.py` (`run_modern_fluent_app`), `main_window.py`, dashboard/plugins/profiles/backups pages, `fluent_impl.py` re-exports.
-- `BackupSeeker/modern_widgets.py` — shared Fluent cards, navigation helpers, dialogs.
-- `BackupSeeker/ui.py` — legacy PyQt6 UI (`run_app`) used as fallback.
-- `BackupSeeker/plugin_manager.py` — plugin discovery and asset download (icons/posters).
-- `BackupSeeker/plugins/base.py` — `GamePlugin` API; `plugins/save_sources.py` — `save_sources` schema.
-- `BackupSeeker/plugins/` — built-in plugins, `games.jsonc`, templates.
+- `BackupSeeker/core.py` - core logic, `GameProfile`, backup/restore orchestration.
+- `BackupSeeker/main.py` - entry: Fluent UI when imports succeed, else legacy `BackupSeeker.ui.run_app`.
+- `BackupSeeker/ui_fluent/` - Fluent UI (PyQt6-Fluent-Widgets): `app_runner.py` (`run_modern_fluent_app`), `main_window.py`, dashboard/plugins/profiles/backups pages, `fluent_impl.py` re-exports.
+- `BackupSeeker/modern_widgets.py` - shared Fluent cards, navigation helpers, dialogs.
+- `BackupSeeker/ui.py` - legacy PyQt6 UI (`run_app`) used as fallback.
+- `BackupSeeker/plugin_manager.py` - plugin discovery and asset download (icons/posters).
+- `BackupSeeker/plugins/base.py` - `GamePlugin` API; `plugins/save_sources.py` - `save_sources` schema.
+- `BackupSeeker/plugins/` - built-in plugins, `games.jsonc`, templates.
 
 For layering, startup flow, and backup pipeline details, see [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md).
 
@@ -100,7 +100,7 @@ Restore steps performed by the app:
 3. Extract selected backup ZIP.
 
 **Maintenance scripts**
-- `scripts/upgrade_backup_zips.ps1` (and `.bat` wrapper) — refresh embedded portable tooling inside existing backup ZIPs via `python -m BackupSeeker.archive.upgrade_zip`. See script header for usage.
+- `scripts/upgrade_backup_zips.ps1` (and `.bat` wrapper) - refresh embedded portable tooling inside existing backup ZIPs via `python -m BackupSeeker.archive.upgrade_zip`. See script header for usage.
 
 **Plugin system**
 Supported plugin types:

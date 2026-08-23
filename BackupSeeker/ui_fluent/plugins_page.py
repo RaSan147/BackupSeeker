@@ -3,36 +3,41 @@ from __future__ import annotations
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
-	QAbstractItemView,
-	QHBoxLayout,
-	QHeaderView,
-	QTableWidgetItem,
-	QVBoxLayout,
-	QWidget,
+    QAbstractItemView,
+    QHBoxLayout,
+    QHeaderView,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
-
 from qfluentwidgets import (
-	InfoBar,
-	LineEdit,
-	PlainTextEdit,
-	PrimaryPushButton,
-	PushButton,
-	StrongBodyLabel,
-	TableWidget,
-	FluentIcon as FIF,
+    FluentIcon as FIF,
+)
+from qfluentwidgets import (
+    InfoBar,
+    LineEdit,
+    PlainTextEdit,
+    PrimaryPushButton,
+    PushButton,
+    StrongBodyLabel,
+    TableWidget,
 )
 
-from ..plugin_manager import (
-	PluginManager,
-	PluginLoadReport,
-	format_load_report_summary,
-	format_load_report_verbose,
-)
 from ..core import ConfigManager
-from ..developer_mode import dev_toast_duration_ms, is_developer_mode, set_dev_widgets_visible
+from ..developer_mode import (
+    dev_toast_duration_ms,
+    is_developer_mode,
+    set_dev_widgets_visible,
+)
+from ..fluent_window import toast_parent
+from ..plugin_manager import (
+    PluginLoadReport,
+    PluginManager,
+    format_load_report_summary,
+    format_load_report_verbose,
+)
 from ..ui_helpers import is_app_dark
 from .helpers import _install_read_only_table
-from ..fluent_window import toast_parent
 from .styles import AdaptiveThemeStyles
 
 

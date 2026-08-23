@@ -1,6 +1,6 @@
 Contributing to BackupSeeker
 ============================
-Documentation index: **[`Docs/`](Docs/)** — start with [`Docs/WORKFLOW.md`](Docs/WORKFLOW.md) and [`Docs/PLUGIN_DEVELOPMENT.md`](Docs/PLUGIN_DEVELOPMENT.md).
+Documentation index: **[`Docs/`](Docs/)** - start with [`Docs/WORKFLOW.md`](Docs/WORKFLOW.md) and [`Docs/PLUGIN_DEVELOPMENT.md`](Docs/PLUGIN_DEVELOPMENT.md).
 
 Thank you for your interest in improving BackupSeeker. This guide covers issue reporting, proposing features, coding standards, plugin submissions, and review expectations.
 
@@ -60,6 +60,7 @@ This installs PyQt6, PyQt6-Fluent-Widgets, frameless-window support, and `reques
 6. Coding Standards
 -------------------
 - Style: follow PEP8; keep line length reasonable (~120 chars max).
+- URLs & Paths: Avoid URL and Path line splitting project-wide. Keep URLs and file/registry paths on a single unbroken line string, even if they exceed standard line length limits.
 - Typing: prefer type hints for public functions/classes.
 - Imports: standard library first, then local modules; avoid unused imports.
 - Docstrings: module, class, and public method docstrings clarify intent.

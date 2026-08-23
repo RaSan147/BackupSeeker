@@ -51,7 +51,7 @@ Both UIs follow the same pattern:
 
 1. Resolve `GamePlugin` for the current profile (`plugin_id`).
 2. `profile.as_operation_dict(plugin)` → optional `plugin.preprocess_backup(profile_dict)`; UI may push changed `save_path` back onto the profile.
-3. **`run_backup(profile, config, plugin)`** in `core.py` — builds archive rows from plugin save layout, optional registry export, bundle body via `archive.bundle.build_bundle`, writes ZIP with `bundle.json`, README, embedded portable scripts/plugin copy, and file members.
+3. **`run_backup(profile, config, plugin)`** in `core.py` - builds archive rows from plugin save layout, optional registry export, bundle body via `archive.bundle.build_bundle`, writes ZIP with `bundle.json`, README, embedded portable scripts/plugin copy, and file members.
 4. Optional `plugin.postprocess_backup({"backup_path": ...})`.
 
 Restore flows use the corresponding preprocess/postprocess restore hooks and Safety archive creation where implemented in the UI/core path.
@@ -76,5 +76,5 @@ To refresh tooling inside older backup ZIPs, use `scripts/upgrade_backup_zips.ps
 
 ## Related documents
 
-- [PRD.md](PRD.md) — product scope
-- [PLUGIN_DEVELOPMENT.md](PLUGIN_DEVELOPMENT.md) — plugin API and examples
+- [PRD.md](PRD.md) - product scope
+- [PLUGIN_DEVELOPMENT.md](PLUGIN_DEVELOPMENT.md) - plugin API and examples

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import logging
 import subprocess
 import sys
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
-
 from qfluentwidgets import FluentTranslator, Theme, setTheme
 
 from ..core import ConfigManager

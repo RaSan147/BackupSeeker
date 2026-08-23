@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
-from typing import Any
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
@@ -13,43 +11,34 @@ from PyQt6.QtWidgets import (
 	QHeaderView,
 	QLabel,
 	QListView,
-	QListWidget,
 	QListWidgetItem,
-	QSizePolicy,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
 )
-
 from qfluentwidgets import (
-	BodyLabel,
 	CaptionLabel,
 	ComboBox,
-	FluentIcon as FIF,
 	InfoBar,
 	InfoBarPosition,
 	LineEdit,
-	PlainTextEdit,
+	ListWidget,
 	PrimaryPushButton,
 	PushButton,
-	RoundMenu,
-	Action,
-	SimpleCardWidget,
 	StrongBodyLabel,
 	TableWidget,
-	TitleLabel,
-	TransparentPushButton,
+)
+from qfluentwidgets import (
+	FluentIcon as FIF,
 )
 
-from ..core import ConfigManager, GameProfile, verify_save_locations_report
-from ..developer_mode import is_developer_mode, set_dev_widgets_visible
+from ..core import ConfigManager, GameProfile
+from ..developer_mode import is_developer_mode
 from ..fluent_window import toast_parent
 from ..modern_widgets import RoundedCard
-from ..plugin_manager import PluginLoadReport, PluginManager
+from ..plugin_manager import PluginManager
 from .helpers import (
 	_install_read_only_table,
-	apply_combo_ui_view,
-	ui_view_mode_from_combo_text,
 )
 from .poster_refresh import PosterRefreshCoordinator
 from .profile_visuals import (
@@ -58,11 +47,11 @@ from .profile_visuals import (
 	elide_multiline_text,
 	fit_pixmap_to_label,
 )
-from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT
+from .styles import LIST_STYLE_TRANSPARENT, AdaptiveThemeStyles, apply_list_transparent_style
 
 
 class StoreCardWidget(RoundedCard):
-	"""Modern Hydra-style store card showing plugin artwork, detection badge, and 1-click Add."""
+	"""Modern store card showing plugin artwork, detection badge, and 1-click Add."""
 
 	clicked = pyqtSignal()
 	profile_requested = pyqtSignal()
@@ -87,16 +76,22 @@ class StoreCardWidget(RoundedCard):
 		self.setFixedSize(260, 275)
 		self.setCursor(Qt.CursorShape.PointingHandCursor)
 
+		is_dark = (self.config.theme or "dark").lower() != "light"
+		bg_card = "#1a1c26" if is_dark else "#ffffff"
+		bg_card_hover = "#222534" if is_dark else "#f0f2f8"
+		border_color = "#2b2e42" if is_dark else "#e0e3ed"
+		accent_color = "#5b6cf9" if is_dark else "#4f46e5"
+
 		self.setStyleSheet(
-			"RoundedCard {"
-			"  background-color: #1a1c26;"
-			"  border: 1px solid #2b2e42;"
-			"  border-radius: 10px;"
-			"}"
-			"RoundedCard:hover {"
-			"  background-color: #222534;"
-			"  border: 1px solid #5b6cf9;"
-			"}"
+			f"StoreCardWidget {{"
+			f"  background-color: {bg_card};"
+			f"  border: 1px solid {border_color};"
+			f"  border-radius: 10px;"
+			f"}}"
+			f"StoreCardWidget:hover {{"
+			f"  background-color: {bg_card_hover};"
+			f"  border: 1px solid {accent_color};"
+			f"}}"
 		)
 
 		layout = QVBoxLayout(self)
@@ -106,12 +101,13 @@ class StoreCardWidget(RoundedCard):
 		# Poster Area
 		self.poster_frame = QFrame(self)
 		self.poster_frame.setFixedSize(240, 135)
+		frame_bg = "#12131a" if is_dark else "#eaedf5"
 		self.poster_frame.setStyleSheet(
-			"QFrame {"
-			"  background-color: #12131a;"
-			"  border: 1px solid #26293b;"
-			"  border-radius: 6px;"
-			"}"
+			f"QFrame {{"
+			f"  background-color: {frame_bg};"
+			f"  border: 1px solid {border_color};"
+			f"  border-radius: 6px;"
+			f"}}"
 		)
 		p_layout = QVBoxLayout(self.poster_frame)
 		p_layout.setContentsMargins(0, 0, 0, 0)
@@ -336,11 +332,11 @@ class ModernGameStoreInterface(QWidget):
 		self.content_layout.setSpacing(12)
 
 		# 1. Cards Grid View
-		self.card_list = QListWidget()
+		self.card_list = ListWidget()
 		self.card_list.setViewMode(QListView.ViewMode.IconMode)
 		self.card_list.setGridSize(self._CARD_GRID_SIZE)
 		self.card_list.setSpacing(12)
-		self.card_list.setStyleSheet(LIST_STYLE_TRANSPARENT)
+		apply_list_transparent_style(self.card_list)
 		self.card_list.setDragEnabled(False)
 		self.card_list.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
 		self.card_list.setMovement(QListView.Movement.Static)
@@ -595,7 +591,7 @@ class ModernGameStoreInterface(QWidget):
 		if hot is not None and hasattr(hot, "reload_now"):
 			hot.reload_now(reason="manual button")
 			return
-		report = self.plugin_manager.reload_plugins(hot=True)
+		self.plugin_manager.reload_plugins(hot=True)
 		self._scan_detected_games_initial()
 		self._load_store()
 		InfoBar.success(

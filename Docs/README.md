@@ -13,4 +13,4 @@ Index of canonical project documents (repository root: `Docs/`).
 
 Contributing policy and review expectations remain in the root [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Repository root** also has `README.md` (user overview), `CONTRIBUTING.md`, and occasional engineering notes such as `REFACTORING_NOTES.md` / `OPTIMIZATION_LOG.md` — treat `Docs/` as the canonical product and architecture reference.
+**Repository root** also has `README.md` (user overview), `CONTRIBUTING.md`, and occasional engineering notes such as `REFACTORING_NOTES.md` / `OPTIMIZATION_LOG.md` - treat `Docs/` as the canonical product and architecture reference.

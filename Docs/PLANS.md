@@ -34,4 +34,4 @@ _Use this section for work in flight. Link PRs and issues._
 
 _Move finished initiatives here with a one-line outcome and optional link to release or PR._
 
-- **Documentation aligned with codebase (2026-04)** — README, `Docs/*`, `CONTRIBUTING.md`, `OPTIMIZATION_LOG.md`, and `REFACTORING_NOTES.md` updated for Fluent `ui_fluent` package layout, `save_sources` plugin API, pinned `requirements.txt`, and `scripts/upgrade_backup_zips`.
+- **Documentation aligned with codebase (2026-04)** - README, `Docs/*`, `CONTRIBUTING.md`, `OPTIMIZATION_LOG.md`, and `REFACTORING_NOTES.md` updated for Fluent `ui_fluent` package layout, `save_sources` plugin API, pinned `requirements.txt`, and `scripts/upgrade_backup_zips`.

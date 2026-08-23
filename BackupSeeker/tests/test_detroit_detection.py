@@ -1,5 +1,5 @@
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from BackupSeeker.plugins.detroit_become_human import DetroitBecomeHumanPlugin
 
 

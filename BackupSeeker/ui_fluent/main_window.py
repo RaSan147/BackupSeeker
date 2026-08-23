@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QByteArray, QTimer, Qt
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
 	QApplication,
@@ -14,87 +14,39 @@ from PyQt6.QtWidgets import (
 	QHBoxLayout,
 	QVBoxLayout,
 	QWidget,
-	QSizePolicy,
 )
 
-from qframelesswindow import AcrylicWindow
 from qfluentwidgets import (
-	BodyLabel,
 	CaptionLabel,
 	ComboBox,
+	FluentWindow,
 	InfoBar,
+	NavigationItemPosition,
 	PushButton,
+	SimpleCardWidget,
 	StrongBodyLabel,
 	SwitchButton,
 	FluentIcon as FIF,
 	setTheme,
 	Theme,
 )
+from BackupSeeker import GameProfile
 
-from ..core import ConfigManager, log_and_reraise, run_backup
+from ..core import ConfigManager
 from ..developer_mode import apply_log_verbosity, developer_mode_status_text, is_developer_mode, set_dev_widgets_visible
-from ..modern_widgets import ModernTitleBar, ModernNavigationInterface
-from ..fluent_window import resolve_plugin_for_profile, toast_parent
-from ..plugin_manager import PluginManager, format_load_report_summary
+from ..fluent_window import toast_parent
+from ..plugin_manager import PluginManager
 from ..plugin_hot_reload import PluginHotReloader
-from ..plugin_runtime import PluginHookError, format_plugin_hook_error, run_plugin_hook
-from ..ui_helpers import is_app_dark
-from ..ui_shared import (
-	ensure_plugin_restore_inputs,
-	open_path_in_explorer,
-	prompt_plugin_primary_path_fix,
-)
+from ..ui_shared import open_path_in_explorer
 
 from .poster_refresh import PosterRefreshCoordinator
 from .library_page import ModernLibraryInterface
 from .store_page import ModernGameStoreInterface
 from .profile_detail_page import ModernGameProfileInterface
-from .restore_dialog import RestoreBackupDialog
-from .styles import AdaptiveThemeStyles
 
 
-class ModernBackupSeekerWindow(AcrylicWindow):
-    """Main Window - Clean, bold Hydra-style layout with Library, Game Store, and Profile views."""
-
-    def _apply_acrylic_frameless_flags_and_effects(self) -> None:
-        if sys.platform != "win32":
-            return
-        try:
-            from qframelesswindow.utils import win32_utils as win_utils
-
-            stay_on_top = (
-                Qt.WindowType.WindowStaysOnTopHint
-                if self.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
-                else Qt.WindowType(0)
-            )
-
-            if win_utils.isWin7():
-                self.setWindowFlags(
-                    Qt.WindowType.FramelessWindowHint
-                    | Qt.WindowType.WindowMinMaxButtonsHint
-                    | stay_on_top
-                )
-            else:
-                self.setWindowFlags(
-                    Qt.WindowType.Window
-                    | Qt.WindowType.FramelessWindowHint
-                    | Qt.WindowType.NoTitleBarBackgroundHint
-                    | stay_on_top
-                )
-
-            wid = self.winId()
-            if win_utils.isWin7():
-                self.windowEffect.addShadowEffect(wid)
-            else:
-                if win_utils.isGreaterEqualWin11():
-                    self.windowEffect.addShadowEffect(wid)
-        except Exception:
-            logging.getLogger("BackupSeeker.ui_fluent").exception(
-                "Failed to apply frameless window flags"
-            )
-
-    def updateFrameless(self):
-        self._apply_acrylic_frameless_flags_and_effects()
+class ModernBackupSeekerWindow(FluentWindow):
+    """Main Window - Clean Fluent layout with Library, Game Store, and Profile views."""
 
     def __init__(self):
         # Load config FIRST
@@ -113,45 +65,66 @@ class ModernBackupSeekerWindow(AcrylicWindow):
         self.config.sync_plugin_versions_from(self.plugin_manager)
         self.config.save_config()
 
+        self._setup_sub_interfaces()
         self._setup_window()
-        self._setup_ui()
         self._connect_signals()
         self._apply_developer_mode()
         self._apply_theme(self.config.theme or "dark")
+        self._restore_or_init_geometry()
         self._poster_refresh.kick_loads(self.config.games)
-        
-    def _setup_window(self):
-        """Setup window geometry and title bar."""
-        self.setTitleBar(ModernTitleBar(self))
-        self.setWindowTitle("")
-        self.setMinimumSize(1100, 700)
-        self.resize(1280, 820)
-        self.center()
 
-        # Solid background styling (Hydra aesthetic)
-        is_dark = (self.config.theme or "dark").lower() != "light"
-        bg_color = "#12131a" if is_dark else "#f4f5f9"
-        self.setStyleSheet(f"ModernBackupSeekerWindow {{ background-color: {bg_color}; }}")
+    @property
+    def navigation(self):
+        """Compatibility alias for navigationInterface."""
+        return self.navigationInterface
+
+    @property
+    def content_widget(self):
+        """Compatibility alias for stackedWidget."""
+        return self.stackedWidget
+
+    def _setup_window(self):
+        """Setup window metadata and navigation constraints."""
+        self.setWindowTitle("BackupSeeker")
+        self.setWindowIcon(FIF.SAVE.icon())
+        self.setMinimumSize(1100, 700)
+        self.navigationInterface.setReturnButtonVisible(False)
+        self.navigationInterface.setExpandWidth(220)
+        self.navigationInterface.setMinimumExpandWidth(800)
+        self.widgetLayout.setContentsMargins(0, 48, 0, 0)
+
+    def _restore_or_init_geometry(self):
+        """Restore saved window geometry or apply default launch size and position."""
+        restored = False
+        if getattr(self.config, "window_geometry", None):
+            try:
+                ba = QByteArray.fromHex(self.config.window_geometry.encode("ascii"))
+                restored = bool(self.restoreGeometry(ba))
+            except Exception:
+                restored = False
+
+        if not restored or self.width() < 1100 or self.height() < 700:
+            self.resize(1280, 820)
+            self.center()
 
     def showEvent(self, event):
         super().showEvent(event)
-        tb = self.titleBar
-        if tb is not None:
-            QTimer.singleShot(50, lambda: tb.raise_())
-            tb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-            tb.setMouseTracking(True)
-
         try:
-            QTimer.singleShot(0, self._apply_acrylic_frameless_flags_and_effects)
-            QTimer.singleShot(150, self._apply_acrylic_frameless_flags_and_effects)
-        except Exception:
-            pass
+            if self.width() < 1100 or self.height() < 700:
+                self._restore_or_init_geometry()
 
-        try:
             self._ensure_within_screen()
             QTimer.singleShot(50, lambda: self._ensure_within_screen())
         except Exception:
             pass
+
+    def closeEvent(self, event):
+        try:
+            self.config.window_geometry = self.saveGeometry().toHex().data().decode("ascii")
+            self.config.save_config()
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def center(self):
         """Center window on screen."""
@@ -238,113 +211,61 @@ class ModernBackupSeekerWindow(AcrylicWindow):
                     pass
         except Exception:
             pass
-        
-    def _setup_ui(self):
-        """Setup UI with Library, Game Store, Game Profile, and Settings."""
-        outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
 
-        # Full-width spacer matching title bar height
-        title_bar = self.titleBar
-        title_height = title_bar.sizeHint().height() if title_bar is not None else 45
-        full_top_spacer = QWidget()
-        full_top_spacer.setFixedHeight(title_height)
-        full_top_spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        outer_layout.addWidget(full_top_spacer)
-
-        # Main horizontal layout
-        main_h_layout = QHBoxLayout()
-        main_h_layout.setContentsMargins(0, 0, 0, 0)
-        main_h_layout.setSpacing(0)
-
-        # Navigation sidebar
-        self.navigation = ModernNavigationInterface(self)
-        self.navigation.setExpandWidth(220)
-        self.navigation.setMinimumExpandWidth(800)
-        is_dark = (self.config.theme or "dark").lower() != "light"
-        nav_bg = "#181a24" if is_dark else "#ffffff"
-        self.navigation.setStyleSheet(f"ModernNavigationInterface {{ background-color: {nav_bg}; border-right: 1px solid {'#26293b' if is_dark else '#e0e3ed'}; }}")
-
-        # Content area
-        self.content_widget = QWidget()
-        self.content_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        content_bg = "#12131a" if is_dark else "#f4f5f9"
-        self.content_widget.setStyleSheet(f"QWidget {{ background-color: {content_bg}; }}")
-        self.stacked_layout = QVBoxLayout(self.content_widget)
-        self.stacked_layout.setContentsMargins(0, 0, 0, 0)
-
+    def _setup_sub_interfaces(self):
+        """Setup Library, Game Store, Game Profile, and Settings."""
         # Primary Interfaces
         self.library_interface = ModernLibraryInterface(
             self.config, self.plugin_manager, self._poster_refresh, parent=self
         )
+        self.library_interface.setObjectName("libraryInterface")
+        self.addSubInterface(
+            self.library_interface,
+            FIF.APPLICATION,
+            "Library",
+        )
+
         self.store_interface = ModernGameStoreInterface(
             self.config, self.plugin_manager, self._poster_refresh, parent=self
         )
+        self.store_interface.setObjectName("storeInterface")
+        self.addSubInterface(
+            self.store_interface,
+            FIF.MARKET,
+            "Game Store",
+        )
+
         self.profile_interface = ModernGameProfileInterface(
             self.config, self.plugin_manager, self._poster_refresh, parent=self
         )
+        self.profile_interface.setObjectName("profileInterface")
+        self.stackedWidget.addWidget(self.profile_interface)
+
         self.settings_interface = self._create_settings_interface()
-
-        # Add to stacked layout
-        self.stacked_layout.addWidget(self.library_interface)
-        self.stacked_layout.addWidget(self.store_interface)
-        self.stacked_layout.addWidget(self.profile_interface)
-        self.stacked_layout.addWidget(self.settings_interface)
-
-        # Hide all except Library by default
-        self.library_interface.show()
-        self.store_interface.hide()
-        self.profile_interface.hide()
-        self.settings_interface.hide()
-
-        # Setup navigation items
-        self._setup_navigation()
-
-        main_h_layout.addWidget(self.navigation)
-        main_h_layout.addWidget(self.content_widget)
-        outer_layout.addLayout(main_h_layout)
-        
-    def _setup_navigation(self):
-        """Setup 3-item clean navigation sidebar."""
-        self.navigation.addItem(
-            routeKey="library",
-            icon=FIF.APPLICATION,
-            text="Library",
-            onClick=lambda: self._show_interface("library")
+        self.settings_interface.setObjectName("settingsInterface")
+        self.addSubInterface(
+            self.settings_interface,
+            FIF.SETTING,
+            "Settings",
+            position=NavigationItemPosition.BOTTOM,
         )
-        
-        self.navigation.addItem(
-            routeKey="store", 
-            icon=FIF.MARKET,
-            text="Game Store",
-            onClick=lambda: self._show_interface("store")
-        )
-        
-        self.navigation.addItem(
-            routeKey="settings",
-            icon=FIF.SETTING,
-            text="Settings",
-            onClick=lambda: self._show_interface("settings")
-        )
-        
-        self.navigation.setCurrentItem("library")
-        
+
     def _create_settings_interface(self):
         """Create settings page."""
         widget = QWidget()
+        widget.setObjectName("settingsWidget")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(28, 24, 28, 24)
         layout.setSpacing(16)
 
         title_label = StrongBodyLabel("Settings")
-        title_label.setStyleSheet("StrongBodyLabel { font-size: 24px; font-weight: bold; }")
+        title_label.setStyleSheet("StrongBodyLabel { font-size: 24px; font-weight: bold; background: transparent; }")
         layout.addWidget(title_label)
 
         # Theme selector card
-        theme_card = QWidget()
-        theme_card.setStyleSheet("QWidget { background-color: #181a24; border: 1px solid #2b2e42; border-radius: 10px; padding: 16px; }")
+        theme_card = SimpleCardWidget(widget)
         t_layout = QVBoxLayout(theme_card)
+        t_layout.setContentsMargins(16, 16, 16, 16)
         t_layout.setSpacing(8)
         t_layout.addWidget(StrongBodyLabel("App Theme"))
         t_layout.addWidget(CaptionLabel("Choose between sleek dark mode or light mode appearance."))
@@ -368,9 +289,9 @@ class ModernBackupSeekerWindow(AcrylicWindow):
         layout.addWidget(theme_card)
 
         # Storage options card
-        storage_card = QWidget()
-        storage_card.setStyleSheet("QWidget { background-color: #181a24; border: 1px solid #2b2e42; border-radius: 10px; padding: 16px; }")
+        storage_card = SimpleCardWidget(widget)
         s_layout = QVBoxLayout(storage_card)
+        s_layout.setContentsMargins(16, 16, 16, 16)
         s_layout.setSpacing(8)
         s_layout.addWidget(StrongBodyLabel("Backup Storage Location"))
         s_layout.addWidget(CaptionLabel("Configure where game save backup zip files are stored on disk."))
@@ -397,9 +318,9 @@ class ModernBackupSeekerWindow(AcrylicWindow):
         layout.addWidget(storage_card)
 
         # Developer Mode card
-        dev_card = QWidget()
-        dev_card.setStyleSheet("QWidget { background-color: #181a24; border: 1px solid #2b2e42; border-radius: 10px; padding: 16px; }")
+        dev_card = SimpleCardWidget(widget)
         d_layout = QVBoxLayout(dev_card)
+        d_layout.setContentsMargins(16, 16, 16, 16)
         d_layout.setSpacing(8)
 
         dev_row = QHBoxLayout()
@@ -448,28 +369,29 @@ class ModernBackupSeekerWindow(AcrylicWindow):
         
     def _show_interface(self, key: str):
         """Switch active interface."""
-        interfaces = {
+        key_map = {
             "library": self.library_interface,
             "store": self.store_interface,
             "profile": self.profile_interface,
             "settings": self.settings_interface,
         }
-
-        for k, widget in interfaces.items():
-            widget.setVisible(k == key)
-
-        if key in ("library", "store", "settings"):
-            self.navigation.setCurrentItem(key)
+        target = key_map.get(key)
+        if target is not None:
+            self.switchTo(target)
+            if key in ("library", "store", "settings"):
+                self.navigationInterface.setCurrentItem(target.objectName())
         
     def open_game_profile(self, profile: GameProfile, source: str = "library"):
         """Navigate to the Game Profile view."""
         self.profile_interface.set_profile(profile, source_view=source)
-        self._show_interface("profile")
+        self.switchTo(self.profile_interface)
 
     def back_from_game_profile(self):
         """Return to the source view from profile."""
-        target = getattr(self.profile_interface, "source_view", "library")
-        self._show_interface(target)
+        target_name = getattr(self.profile_interface, "source_view", "library")
+        target = self.store_interface if target_name == "store" else self.library_interface
+        self.switchTo(target)
+        self.navigationInterface.setCurrentItem(target.objectName())
 
     def _connect_signals(self):
         """Connect signals across all pages."""
@@ -505,6 +427,28 @@ class ModernBackupSeekerWindow(AcrylicWindow):
             parent=toast_parent(self),
             duration=5000,
         )
+
+    def _apply_developer_mode() -> None:
+        """Sync hot reload, logging verbosity, and dev-only UI widgets."""
+        enabled = is_developer_mode(self.config)
+        apply_log_verbosity(enabled=enabled)
+        if enabled:
+            self._plugin_hot.start()
+        else:
+            self._plugin_hot.stop()
+
+        status = developer_mode_status_text(self.config)
+        if hasattr(self, "_dev_status_label"):
+            self._dev_status_label.setText(status)
+        if hasattr(self, "dev_mode_switch"):
+            self.dev_mode_switch.blockSignals(True)
+            self.dev_mode_switch.setChecked(enabled)
+            self.dev_mode_switch.blockSignals(False)
+        if hasattr(self, "_dev_action_widgets"):
+            set_dev_widgets_visible(enabled, self._dev_action_widgets)
+
+        if hasattr(self.store_interface, "reload_btn"):
+            self.store_interface.reload_btn.setVisible(enabled)
 
     def _apply_developer_mode(self) -> None:
         """Sync hot reload, logging verbosity, and dev-only UI widgets."""
@@ -569,23 +513,21 @@ class ModernBackupSeekerWindow(AcrylicWindow):
         self.library_interface.reload()
         self.store_interface.reload()
         self._poster_refresh.kick_loads(self.config.games)
-        
+
     def _apply_theme(self, theme_name: str):
         """Apply dark/light theme."""
-        if (theme_name or "").lower() == "light":
-            setTheme(Theme.LIGHT)
-            self.setStyleSheet("ModernBackupSeekerWindow { background-color: #f4f5f9; }")
-            if hasattr(self, "navigation"):
-                self.navigation.setStyleSheet("ModernNavigationInterface { background-color: #ffffff; border-right: 1px solid #e0e3ed; }")
-            if hasattr(self, "content_widget"):
-                self.content_widget.setStyleSheet("QWidget { background-color: #f4f5f9; }")
-        else:
+        is_dark = (theme_name or "dark").lower() != "light"
+        if is_dark:
             setTheme(Theme.DARK)
-            self.setStyleSheet("ModernBackupSeekerWindow { background-color: #12131a; }")
-            if hasattr(self, "navigation"):
-                self.navigation.setStyleSheet("ModernNavigationInterface { background-color: #181a24; border-right: 1px solid #26293b; }")
-            if hasattr(self, "content_widget"):
-                self.content_widget.setStyleSheet("QWidget { background-color: #12131a; }")
+            self.setCustomBackgroundColor("#12131a", "#12131a")
+        else:
+            setTheme(Theme.LIGHT)
+            self.setCustomBackgroundColor("#f4f5f9", "#f4f5f9")
+
+        if hasattr(self, "library_interface") and hasattr(self.library_interface, "reload"):
+            self.library_interface.reload()
+        if hasattr(self, "store_interface") and hasattr(self.store_interface, "reload"):
+            self.store_interface.reload()
 
         app = QApplication.instance()
         if app is not None:

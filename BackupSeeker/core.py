@@ -14,11 +14,12 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, cast
 
 try:
 	import winreg
@@ -26,7 +27,7 @@ except Exception:  # pragma: no cover
 	winreg = None
 
 if winreg is not None:
-	_WINREG_HKEY_BY_NAME: Dict[str, Any] = {
+	_WINREG_HKEY_BY_NAME: dict[str, Any] = {
 		"HKEY_CLASSES_ROOT": winreg.HKEY_CLASSES_ROOT,
 		"HKEY_CURRENT_USER": winreg.HKEY_CURRENT_USER,
 		"HKEY_LOCAL_MACHINE": winreg.HKEY_LOCAL_MACHINE,
@@ -45,6 +46,7 @@ from .archive.constants import (
 	RESTORE_CLI_PATH,
 	ZIP_README_PATH,
 )
+from .archive.metadata import read_archive_metadata, summarize_archive_metadata  # noqa: F401
 from .archive.restore_core import is_safe_zip_member_rest
 from .registry_win import export_registry_entries
 
@@ -95,16 +97,16 @@ def _manifest_roots_from_profile(
 	plugin: object | None,
 	*,
 	manifest_keys: set[str],
-	key_to_logical: Dict[str, str],
-	archive_rows: List[Tuple[str, Path, Path]],
-) -> List[Dict[str, Any]]:
+	key_to_logical: dict[str, str],
+	archive_rows: list[tuple[str, Path, Path]],
+) -> list[dict[str, Any]]:
 	"""Build ``roots`` entries for format 4 (one row per configured save root)."""
 
-	count_by_sk: Dict[str, int] = {}
+	count_by_sk: dict[str, int] = {}
 	for sk, _, _ in archive_rows:
 		count_by_sk[sk] = count_by_sk.get(sk, 0) + 1
 
-	roots_out: List[Dict[str, Any]] = []
+	roots_out: list[dict[str, Any]] = []
 	for logical_key, contracted in profile.effective_save_locations(plugin):
 		sk = zip_sanitized_key(logical_key, plugin)
 		logical = key_to_logical.get(sk, logical_key)
@@ -123,7 +125,7 @@ def _manifest_roots_from_profile(
 class PathUtils:
 	"""Robust path manipulation and environment variable handling."""
 
-	_shell_folders_cache: Dict[str, str] = {}
+	_shell_folders_cache: dict[str, str] = {}
 
 	@staticmethod
 	def get_windows_shell_folder(name: str, default_fallback: str) -> str:
@@ -190,7 +192,7 @@ class PathUtils:
 
 		abs_path = os.path.abspath(abs_path)
 
-		env_vars: Dict[str, str] = {}
+		env_vars: dict[str, str] = {}
 		for key, value in os.environ.items():
 			if len(value) > 3 and os.path.exists(value):
 				env_vars[key] = os.path.abspath(value)
@@ -231,7 +233,7 @@ def zip_sanitized_key(logical_key: str, plugin: object | None) -> str:
 	return sanitize_location_key(logical_key)
 
 
-def path_matches_file_patterns(rel_posix: str, patterns: List[str]) -> bool:
+def path_matches_file_patterns(rel_posix: str, patterns: list[str]) -> bool:
 	if not patterns:
 		return True
 	name = Path(rel_posix).name
@@ -254,7 +256,7 @@ _SKIP_WALK_DIRS = frozenset(
 )
 
 
-def _relative_excluded(rel_posix: str, exclude_globs: List[str]) -> bool:
+def _relative_excluded(rel_posix: str, exclude_globs: list[str]) -> bool:
 	for pat in exclude_globs:
 		if fnmatch.fnmatch(rel_posix, pat) or fnmatch.fnmatch(Path(rel_posix).name, pat):
 			return True
@@ -263,12 +265,12 @@ def _relative_excluded(rel_posix: str, exclude_globs: List[str]) -> bool:
 
 def collect_files_under(
 	root: Path,
-	patterns: List[str],
+	patterns: list[str],
 	*,
-	exclude_globs: List[str] | None = None,
-) -> List[Path]:
+	exclude_globs: list[str] | None = None,
+) -> list[Path]:
 	"""All files under root matching glob-style patterns; optional glob excludes (e.g. ``**/cache/**``)."""
-	out: List[Path] = []
+	out: list[Path] = []
 	excl = list(exclude_globs) if exclude_globs else []
 	try:
 		root_r = root.resolve()
@@ -292,11 +294,22 @@ def collect_files_under(
 	return out
 
 
-def verify_save_locations_report(profile: GameProfile, plugin: object | None) -> Dict[str, Any]:
+def verify_save_locations_report(profile: GameProfile, plugin: object | None) -> dict[str, Any]:
 	"""Structured status for UI: folders, file counts, optional registry hints."""
 	patterns = profile.effective_file_patterns(plugin)
 	locs = profile.effective_save_locations(plugin)
-	location_rows: List[Dict[str, Any]] = []
+	pg = _pr.as_game_plugin(plugin)
+	label_map: dict[str, str] = {}
+	if pg is not None and getattr(pg, "save_sources", None):
+		for s in pg.save_sources:
+			if not isinstance(s, dict):
+				continue
+			eid = str(s.get("id") or "").strip() or "path_0"
+			lbl = str(s.get("label") or s.get("name") or "").strip()
+			if lbl and eid not in label_map:
+				label_map[eid] = lbl
+
+	location_rows: list[dict[str, Any]] = []
 	for logical_key, contracted in locs:
 		root = PathUtils.expand(contracted)
 		exists = root.exists()
@@ -309,6 +322,7 @@ def verify_save_locations_report(profile: GameProfile, plugin: object | None) ->
 		location_rows.append(
 			{
 				"logical_key": logical_key,
+				"label": label_map.get(logical_key, ""),
 				"contracted_path": contracted,
 				"expanded_path": str(root),
 				"exists": exists,
@@ -317,7 +331,7 @@ def verify_save_locations_report(profile: GameProfile, plugin: object | None) ->
 			}
 		)
 
-	reg_rows: List[Dict[str, Any]] = []
+	reg_rows: list[dict[str, Any]] = []
 	pg = _pr.as_game_plugin(plugin)
 	rk_list = list(pg.registry_keys) if pg is not None and pg.registry_keys else []
 
@@ -386,10 +400,10 @@ def _stored_path_field_from_profile_dict(raw_path: object) -> str:
 	return PathUtils.contract(raw)
 
 
-def _plugin_inputs_dict_from_json(data: dict) -> Dict[str, str]:
+def _plugin_inputs_dict_from_json(data: dict) -> dict[str, str]:
 	"""Parse ``plugin_inputs`` from persisted profile JSON."""
 
-	out: Dict[str, str] = {}
+	out: dict[str, str] = {}
 	raw_pi = data.get("plugin_inputs")
 	if not isinstance(raw_pi, dict):
 		return out
@@ -417,8 +431,8 @@ class GameProfile:
 	id: str = ""
 	name: str = ""  # Manual profile title; for plugin-backed rows optional cache of plugin display name
 	save_path: str = ""
-	plugin_inputs: Dict[str, str] = field(default_factory=dict)
-	file_patterns: List[str] | None = None
+	plugin_inputs: dict[str, str] = field(default_factory=dict)
+	file_patterns: list[str] | None = None
 	plugin_id: str = ""
 	plugin_version: str = ""
 	icon: str = ""  # Manual profiles only; plugin profiles use plugin assets
@@ -481,7 +495,7 @@ class GameProfile:
 			return (self.plugin_id or "").strip() or "Game"
 		return (self.name or "").strip()
 
-	def effective_save_locations(self, plugin: object | None) -> List[Tuple[str, str]]:
+	def effective_save_locations(self, plugin: object | None) -> list[tuple[str, str]]:
 		"""Return (logical_key, contracted_path) pairs for backup/restore.
 
 		Plugin-backed profiles normally use roots from the plugin. Plugins may
@@ -499,7 +513,7 @@ class GameProfile:
 						resolved = None
 					if isinstance(resolved, list) and resolved:
 						return resolved
-			pairs: List[Tuple[str, str]] = []
+			pairs: list[tuple[str, str]] = []
 			if pg is not None:
 				seq = pg.save_locations
 				if seq is not None and isinstance(seq, list):
@@ -523,14 +537,14 @@ class GameProfile:
 		locs = self.effective_save_locations(plugin)
 		if self.plugin_id:
 			n = len(locs)
-			return f"{n} save root(s) — run Verify for status" if n else ""
+			return f"{n} save root(s) - run Verify for status" if n else ""
 		if not locs:
 			return ""
 		if len(locs) == 1:
 			return locs[0][1]
 		return "; ".join(f"{k}: {p}" for k, p in locs)
 
-	def effective_file_patterns(self, plugin: object | None) -> List[str]:
+	def effective_file_patterns(self, plugin: object | None) -> list[str]:
 		fp = self.file_patterns if self.file_patterns is not None else ["*"]
 		if self.plugin_id and plugin is not None and fp == ["*"]:
 			pg = _pr.as_game_plugin(plugin)
@@ -539,9 +553,9 @@ class GameProfile:
 				return list(got)
 		return fp
 
-	def find_candidate_executables(self, plugin: object | None = None) -> List[str]:
+	def find_candidate_executables(self, plugin: object | None = None) -> list[str]:
 		"""Scan for candidate executable paths on the machine."""
-		candidates: List[str] = []
+		candidates: list[str] = []
 		seen: set[str] = set()
 
 		def _add(path_str: str) -> None:
@@ -572,7 +586,18 @@ class GameProfile:
 		if self.executable_path:
 			_add(self.executable_path)
 
-		# 2. Registry paths from plugin
+		# 2. Detected install directory from plugin (e.g. Unity Player.log or registry probe)
+		if plugin is not None:
+			pg = _pr.as_game_plugin(plugin)
+			if pg is not None and hasattr(pg, "get_detected_install_path"):
+				try:
+					inst = pg.get_detected_install_path()
+					if inst is not None:
+						_add(str(inst))
+				except Exception:
+					pass
+
+		# 3. Registry paths from plugin
 		if plugin is not None:
 			pg = _pr.as_game_plugin(plugin)
 			if pg is not None and pg.registry_keys and winreg is not None:
@@ -587,7 +612,7 @@ class GameProfile:
 					except Exception:
 						pass
 
-		# 3. Check save locations / pin parent directories for executables
+		# 4. Check save locations / pin parent directories for executables
 		for _, contracted in self.effective_save_locations(plugin):
 			try:
 				p = PathUtils.expand(contracted)
@@ -602,6 +627,14 @@ class GameProfile:
 			except Exception:
 				pass
 
+		def _candidate_rank(p_str: str) -> int:
+			name = Path(p_str).name.lower()
+			for bad in ("unins", "uninstall", "crashhandler", "crashreport", "helper", "setup", "update"):
+				if bad in name:
+					return 1
+			return 0
+
+		candidates.sort(key=_candidate_rank)
 		return candidates
 
 	def launch_executable(self, exe_path: str | None = None) -> bool:
@@ -616,11 +649,11 @@ class GameProfile:
 			workdir = str(expanded.parent)
 			subprocess.Popen([str(expanded)], cwd=workdir, shell=False)
 			return True
-		except Exception as e:
+		except Exception:
 			logging.exception("Failed to launch game executable: %s", target)
 			return False
 
-	def as_operation_dict(self, plugin: object | None) -> Dict:
+	def as_operation_dict(self, plugin: object | None) -> dict:
 		pv = (self.plugin_version or "").strip()
 		if not pv and plugin is not None:
 			pg = _pr.as_game_plugin(plugin)
@@ -637,8 +670,8 @@ class GameProfile:
 			"plugin_version": pv,
 		}
 
-	def to_dict(self) -> Dict[str, Any]:
-		common: Dict[str, Any] = {
+	def to_dict(self) -> dict[str, Any]:
+		common: dict[str, Any] = {
 			"id": self.id,
 		}
 		if self.executable_path:
@@ -669,7 +702,7 @@ class GameProfile:
 		return out
 
 	@classmethod
-	def from_dict(cls, data: dict) -> "GameProfile":
+	def from_dict(cls, data: dict) -> GameProfile:
 		plugin_id_early = (data.get("plugin_id") or "").strip()
 		if plugin_id_early:
 			save_path = ""
@@ -711,10 +744,10 @@ class ConfigManager:
 		self.backup_fixed_path: str = ""
 		self.backup_root = Path.cwd() / "backups"
 
-		self.games: Dict[str, GameProfile] = {}
+		self.games: dict[str, GameProfile] = {}
 		self.theme: str = "system"
 		self.window_geometry: str | None = None
-		self.table_widths: List[int] = []
+		self.table_widths: list[int] = []
 		self.config_format_version: int = CONFIG_FORMAT_VERSION
 		# List vs cards view (per surface), values: "list" | "cards"
 		self.ui_view_dashboard_profiles: str = "list"
@@ -821,7 +854,7 @@ class ConfigManager:
 		cfv = data.get("config_format_version", 1)
 		self.config_format_version = int(cfv) if isinstance(cfv, int) else 1
 
-		# Per-page list / cards — load before format migration ``save_config`` preserves them.
+		# Per-page list / cards - load before format migration ``save_config`` preserves them.
 		uv = data.get("ui_views")
 		if isinstance(uv, dict):
 			self.ui_view_dashboard_profiles = _normalize_ui_view_value(
@@ -915,14 +948,14 @@ def restore_confirmation_details(
 	profile: GameProfile,
 	plugin: object | None,
 	config: ConfigManager,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 	"""Facts for UI copy: wipe vs merge, and whether safety ZIPs are written per root."""
 
 	label = profile.resolved_name(plugin)
 	clear_first = clear_before_restore(plugin)
 	locs = profile.effective_save_locations(plugin)
 	safety_folder = config.safety_backup_dir_for_profile(profile, plugin)
-	roots: List[Dict[str, Any]] = []
+	roots: list[dict[str, Any]] = []
 	for logical_key, contracted in locs:
 		dest = PathUtils.expand(contracted)
 		has_files = False
@@ -952,7 +985,7 @@ def _gather_archive_rows(
 	plugin: object | None,
 	*,
 	allow_empty_mechanical_fallback: bool,
-) -> Tuple[List[Tuple[str, Path, Path]], List[str], List[str]]:
+) -> tuple[list[tuple[str, Path, Path]], list[str], list[str]]:
 	"""Try ``mechanical_collect_archive_rows``, else walk each configured root."""
 
 	patterns = profile.effective_file_patterns(plugin)
@@ -960,13 +993,13 @@ def _gather_archive_rows(
 	if not locs:
 		return [], [], []
 
-	exclude_globs: List[str] = []
+	exclude_globs: list[str] = []
 	if plugin is not None:
 		raw_ex = _pr.backup_exclude_globs(plugin)
 		if raw_ex:
 			exclude_globs = [str(x) for x in raw_ex]
 
-	mechanical: List[Tuple[str, Path, Path]] | None = None
+	mechanical: list[tuple[str, Path, Path]] | None = None
 	if plugin is not None:
 		try:
 			raw = _pr.mechanical_collect_archive_rows(
@@ -976,7 +1009,7 @@ def _gather_archive_rows(
 				exclude_globs=exclude_globs,
 			)
 			if isinstance(raw, list):
-				mechanical = cast(List[Tuple[str, Path, Path]], raw)
+				mechanical = cast(list[tuple[str, Path, Path]], raw)
 		except _pr.PluginHookError:
 			raise
 		except Exception:
@@ -996,7 +1029,7 @@ def _gather_archive_rows(
 		archive_rows = []
 		hints = []
 		root_diagnostics = []
-		seen_roots: set[Tuple[str, Path]] = set()
+		seen_roots: set[tuple[str, Path]] = set()
 		for logical_key, contracted in locs:
 			key = zip_sanitized_key(logical_key, plugin)
 			root = PathUtils.expand(contracted)
@@ -1035,7 +1068,7 @@ def _gather_archive_rows(
 
 	# Deduplicate archive_rows based on target arcname inside the ZIP archive.
 	# Keep the one with the latest modification time if duplicate names exist.
-	seen_arcnames: Dict[str, Tuple[Tuple[str, Path, Path], float]] = {}
+	seen_arcnames: dict[str, tuple[tuple[str, Path, Path], float]] = {}
 	for row in archive_rows:
 		key, fpath, rel = row
 		arcname = f"{key}/{rel.as_posix()}"
@@ -1055,7 +1088,7 @@ def _gather_archive_rows(
 	return deduped_rows, hints, root_diagnostics
 
 
-def _plugin_snapshot_and_registry(plugin: object | None) -> Tuple[Dict[str, Any], Dict[str, Any] | None]:
+def _plugin_snapshot_and_registry(plugin: object | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
 	snapshot = _pr.call_to_snapshot_dict(plugin)
 	if plugin is None:
 		return snapshot, None
@@ -1066,12 +1099,12 @@ def _plugin_snapshot_and_registry(plugin: object | None) -> Tuple[Dict[str, Any]
 	return (snapshot, reg) if isinstance(reg, dict) and reg.get("entries") else (snapshot, None)
 
 
-def _finalize_bundle_body(plugin: object | None, body: Dict[str, Any]) -> Dict[str, Any]:
+def _finalize_bundle_body(plugin: object | None, body: dict[str, Any]) -> dict[str, Any]:
 	if plugin is None:
 		return body
 	try:
 		out = _pr.mechanical_finalize_bundle(plugin, body)
-		return cast(Dict[str, Any], out) if isinstance(out, dict) else body
+		return cast(dict[str, Any], out) if isinstance(out, dict) else body
 	except _pr.PluginHookError:
 		raise
 	except Exception:
@@ -1086,7 +1119,7 @@ def run_backup(
 	*,
 	relaxed: bool = False,
 	dest_zip: Path | None = None,
-	bundle_app_extra: Dict[str, Any] | None = None,
+	bundle_app_extra: dict[str, Any] | None = None,
 ) -> Path | None:
 	"""Backup all configured save roots into one ZIP (bundle.json format 1 + README + portable restore_cli).
 
@@ -1136,7 +1169,7 @@ def run_backup(
 			f"{detail}"
 		)
 
-	key_to_logical: Dict[str, str] = {zip_sanitized_key(k, plugin): k for k, _ in locs}
+	key_to_logical: dict[str, str] = {zip_sanitized_key(k, plugin): k for k, _ in locs}
 	manifest_keys_sorted = sorted({str(k) for k, _, _ in archive_rows})
 	logical_keys_map = {sk: key_to_logical.get(sk, sk) for sk in manifest_keys_sorted}
 	roots = _manifest_roots_from_profile(
@@ -1150,7 +1183,7 @@ def run_backup(
 	created_at = datetime.now().isoformat(timespec="seconds")
 	snapshot, registry_export = _plugin_snapshot_and_registry(plugin)
 
-	app_extra: Dict[str, Any] = {"generator": "run_backup"}
+	app_extra: dict[str, Any] = {"generator": "run_backup"}
 	if bundle_app_extra:
 		app_extra.update(bundle_app_extra)
 
@@ -1172,7 +1205,7 @@ def run_backup(
 		),
 	)
 
-	extra_lines: List[str] = []
+	extra_lines: list[str] = []
 	if plugin is not None:
 		extra_lines = _pr.extra_readme_lines(plugin)
 
@@ -1211,9 +1244,9 @@ def run_backup(
 	return dest_zip
 
 
-def _unique_expand_roots(locs: List[Tuple[str, str]]) -> List[Path]:
+def _unique_expand_roots(locs: list[tuple[str, str]]) -> list[Path]:
 	seen: set[str] = set()
-	out: List[Path] = []
+	out: list[Path] = []
 	for _, contracted in locs:
 		try:
 			p = PathUtils.expand(contracted).resolve()
@@ -1237,7 +1270,6 @@ def run_restore(
 ) -> None:
 	"""Restore from a bundle archive (``bundle.json`` format 1 only)."""
 
-	from .archive.metadata import read_archive_metadata
 	from .registry_win import import_registry_entries
 
 	locs = profile.effective_save_locations(plugin)
@@ -1256,12 +1288,12 @@ def run_restore(
 		arch_pid = gm["plugin_id"].strip()
 		if arch_pid and (profile.plugin_id or "").strip() and arch_pid != (profile.plugin_id or "").strip():
 			logging.warning(
-				"Restore: archive plugin_id %r differs from profile %r — using current profile paths",
+				"Restore: archive plugin_id %r differs from profile %r - using current profile paths",
 				arch_pid,
 				(profile.plugin_id or "").strip(),
 			)
 
-	map_sk_to_contracted: Dict[str, str] = {}
+	map_sk_to_contracted: dict[str, str] = {}
 	for logical_key, contracted in locs:
 		map_sk_to_contracted[zip_sanitized_key(logical_key, plugin)] = contracted
 
@@ -1302,6 +1334,8 @@ def run_restore(
 				logging.warning("Skipping unsafe archive path in %s: %s", backup_file, name)
 				continue
 			contracted = map_sk_to_contracted.get(sk)
+			if not contracted and len(locs) == 1:
+				contracted = locs[0][1]
 			if not contracted:
 				continue
 			if info.file_size > MAX_RESTORE_ENTRY_UNCOMPRESSED_BYTES:
@@ -1343,4 +1377,3 @@ def run_restore(
 			)
 
 
-from .archive.metadata import read_archive_metadata, summarize_archive_metadata

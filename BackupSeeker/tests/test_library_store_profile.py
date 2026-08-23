@@ -1,6 +1,6 @@
 import unittest
-from pathlib import Path
-from BackupSeeker.core import ConfigManager, GameProfile
+
+from BackupSeeker.core import GameProfile
 
 
 class TestGameProfileExecutables(unittest.TestCase):
@@ -26,7 +26,6 @@ class TestGameProfileExecutables(unittest.TestCase):
 		)
 		d = prof.to_dict()
 		self.assertEqual(d.get("executable_path"), "D:/Detroit/DetroitBecomeHuman.exe")
-
 		loaded = GameProfile.from_dict(d)
 		self.assertEqual(loaded.executable_path, "D:/Detroit/DetroitBecomeHuman.exe")
 		self.assertEqual(loaded.plugin_id, "detroit_become_human")

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 try:
 	import winreg
 except Exception:  # pragma: no cover
 	winreg = None  # type: ignore
 
-JsonDict = Dict[str, Any]
+JsonDict = dict[str, Any]
 
 if sys.platform != "win32" or winreg is None:  # pragma: no cover
 	_EXPORT_ERR = "not Windows or winreg unavailable"
@@ -33,7 +33,7 @@ def _parse_key_path(key_path: str):
 	return hkey, sub_key
 
 
-def export_registry_entries(entries: List[Tuple[str, str]]) -> JsonDict:
+def export_registry_entries(entries: list[tuple[str, str]]) -> JsonDict:
 	"""Read registry values; store as JSON-safe structures."""
 
 	out: JsonDict = {"entries": []}

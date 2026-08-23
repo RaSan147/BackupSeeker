@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict
+from collections.abc import Callable
 
 from PyQt6.QtCore import QTimer
 
@@ -27,7 +27,7 @@ class PosterRefreshCoordinator:
 		if target not in self._targets:
 			self._targets.append(target)
 
-	def kick_loads(self, games: Dict[str, object]) -> None:
+	def kick_loads(self, games: dict[str, object]) -> None:
 		"""Hydrate cached posters immediately; only stagger network fetches for missing files."""
 
 		plugins = self._unique_plugins(games)
@@ -57,7 +57,7 @@ class PosterRefreshCoordinator:
 		gid = (getattr(plugin, "game_id", "") or "").strip() or None
 		QTimer.singleShot(0, lambda: self._notify(gid))
 
-	def _unique_plugins(self, games: Dict[str, object]) -> list[object]:
+	def _unique_plugins(self, games: dict[str, object]) -> list[object]:
 		seen: set[str] = set()
 		plugins: list[object] = []
 		for profile in games.values():

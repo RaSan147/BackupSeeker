@@ -139,7 +139,7 @@ class ModernDashboardInterface(QWidget):
 
 ---
 
-## Documentation refresh — April 2026
+## Documentation refresh - April 2026
 
 Project docs were aligned with the current codebase:
 

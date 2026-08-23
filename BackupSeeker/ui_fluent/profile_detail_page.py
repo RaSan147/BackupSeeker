@@ -1,94 +1,85 @@
 from __future__ import annotations
 
-import os
-import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
 	QAbstractItemView,
-	QApplication,
-	QDialog,
 	QFileDialog,
 	QFrame,
-	QGridLayout,
 	QHBoxLayout,
 	QHeaderView,
 	QLabel,
-	QListWidget,
 	QListWidgetItem,
-	QSizePolicy,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
 )
-
 from qfluentwidgets import (
 	BodyLabel,
 	CaptionLabel,
-	CardWidget,
-	ComboBox,
-	Dialog as FluentDialog,
-	ElevatedCardWidget,
-	FluentIcon as FIF,
 	InfoBar,
 	InfoBarPosition,
 	LineEdit,
+	ListWidget,
 	PlainTextEdit,
 	PrimaryPushButton,
 	PushButton,
-	RoundMenu,
-	Action,
 	SegmentedWidget,
 	SimpleCardWidget,
+	SingleDirectionScrollArea,
 	StrongBodyLabel,
-	SubtitleLabel,
 	TableWidget,
 	TitleLabel,
 	TransparentPushButton,
+	setCustomStyleSheet,
+)
+from qfluentwidgets import (
+	Dialog as FluentDialog,
+)
+from qfluentwidgets import (
+	FluentIcon as FIF,
 )
 
 from ..core import (
 	ConfigManager,
 	GameProfile,
 	PathUtils,
-	clear_before_restore,
 	read_archive_metadata,
 	run_backup,
 	run_restore,
 	summarize_archive_metadata,
 	verify_save_locations_report,
 )
-from ..developer_mode import set_dev_widgets_visible
 from ..fluent_window import resolve_plugin_for_profile, toast_parent
-from ..modern_widgets import ModernGameEditor, RoundedCard
-from ..plugin_runtime import PluginHookError, run_plugin_hook
+from ..modern_widgets import ModernGameEditor
+from ..plugin_runtime import run_plugin_hook
 from ..ui_shared import (
 	confirm_action,
-	confirm_restore,
 	ensure_plugin_restore_inputs,
 	offer_plugin_restore_input_review,
 	open_path_in_explorer,
 )
 from .helpers import (
 	_install_read_only_table,
-	_profile_display_name,
-	_profile_kind_prefix,
 	format_verify_report_text,
-	last_backup_label,
 )
 from .poster_refresh import PosterRefreshCoordinator
-from .profile_visuals import POSTER_LABEL_NAME, ProfilePosterService, fit_pixmap_to_label
+from .profile_visuals import (
+	POSTER_LABEL_NAME,
+	ProfilePosterService,
+	fit_pixmap_to_label,
+)
 from .restore_dialog import RestoreBackupDialog
+from .verify_dialog import VerifySaveDialog
 from .styles import AdaptiveThemeStyles
 
 
-class ModernGameProfileInterface(QWidget):
-	"""Comprehensive, Hydra-inspired Game Profile view.
+class ModernGameProfileInterface(SingleDirectionScrollArea):
+	"""Comprehensive Game Profile view.
 
 	Provides 1-click Backup, Restore, Executable Finder & Launcher,
 	Save Locations Verification, and Single-Game Backup History.
@@ -98,7 +89,7 @@ class ModernGameProfileInterface(QWidget):
 	profiles_changed = pyqtSignal()
 	backup_requested = pyqtSignal()
 
-	_HERO_POSTER_SIZE = QSize(220, 310)
+	_HERO_POSTER_SIZE = QSize(240, 135)
 
 	def __init__(
 		self,
@@ -107,7 +98,7 @@ class ModernGameProfileInterface(QWidget):
 		poster_refresh: PosterRefreshCoordinator | None = None,
 		parent=None,
 	):
-		super().__init__(parent)
+		super().__init__(orient=Qt.Orientation.Vertical, parent=parent)
 		self.config = config
 		self._plugin_manager = plugin_manager
 		self._poster_refresh = poster_refresh
@@ -119,12 +110,19 @@ class ModernGameProfileInterface(QWidget):
 		self.source_view: str = "library"  # "library" or "store"
 		self._backup_rows: list[dict[str, Any]] = []
 
+		self.setWidgetResizable(True)
+		self.setStyleSheet("SingleDirectionScrollArea { background: transparent; border: none; }")
+		self.scroll_content = QWidget(self)
+		self.scroll_content.setObjectName("profileScrollContent")
+		self.scroll_content.setStyleSheet("#profileScrollContent { background: transparent; }")
+		self.setWidget(self.scroll_content)
+
 		self._setup_ui()
 		if self._poster_refresh is not None:
 			self._poster_refresh.register(self._on_posters_refreshed)
 
 	def _setup_ui(self):
-		main_layout = QVBoxLayout(self)
+		main_layout = QVBoxLayout(self.scroll_content)
 		main_layout.setContentsMargins(24, 20, 24, 24)
 		main_layout.setSpacing(18)
 
@@ -152,13 +150,17 @@ class ModernGameProfileInterface(QWidget):
 		main_layout.addLayout(top_bar)
 
 		# Hero Header Card (Cover Art + Title + Status Badges + Action Buttons)
-		self.hero_card = SimpleCardWidget(self)
+		self.hero_card = SimpleCardWidget(self.scroll_content)
 		self.hero_card.setObjectName("heroCard")
 		self.hero_card.setStyleSheet(
 			"SimpleCardWidget#heroCard {"
 			"  background-color: #181a24;"
 			"  border: 1px solid #2b2e42;"
 			"  border-radius: 12px;"
+			"}"
+			"SimpleCardWidget#heroCard QLabel, SimpleCardWidget#heroCard TitleLabel, SimpleCardWidget#heroCard BodyLabel, SimpleCardWidget#heroCard CaptionLabel, SimpleCardWidget#heroCard StrongBodyLabel {"
+			"  background-color: transparent;"
+			"  border: none;"
 			"}"
 		)
 		hero_layout = QHBoxLayout(self.hero_card)
@@ -167,7 +169,7 @@ class ModernGameProfileInterface(QWidget):
 
 		# Left: Poster Image Frame
 		self.poster_frame = QFrame()
-		self.poster_frame.setFixedSize(160, 220)
+		self.poster_frame.setFixedSize(self._HERO_POSTER_SIZE)
 		self.poster_frame.setStyleSheet(
 			"QFrame {"
 			"  background-color: #12131a;"
@@ -246,7 +248,6 @@ class ModernGameProfileInterface(QWidget):
 		self.summary_label = BodyLabel("Configured Save Locations")
 		self.summary_label.setWordWrap(True)
 		self.summary_label.setStyleSheet("BodyLabel { color: #a0a6b8; font-size: 13px; background: transparent; border: none; padding: 0px; }")
-		info_layout.addWidget(self.summary_label)
 		info_layout.addWidget(self.summary_label)
 
 		info_layout.addSpacing(6)
@@ -351,6 +352,7 @@ class ModernGameProfileInterface(QWidget):
 		self.backups_table.setWordWrap(False)
 		self.backups_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		self.backups_table.setAlternatingRowColors(True)
+		self.backups_table.setMinimumHeight(280)
 		styles = AdaptiveThemeStyles()
 		styles.apply_table_style(self.backups_table)
 		_install_read_only_table(self.backups_table)
@@ -363,20 +365,27 @@ class ModernGameProfileInterface(QWidget):
 		info_tab_layout.setSpacing(16)
 
 		# 1. Executable Finder & Configuration Card
-		self.exe_card = SimpleCardWidget(self)
+		self.exe_card = SimpleCardWidget(self.scroll_content)
+		self.exe_card.setObjectName("exeCard")
 		self.exe_card.setStyleSheet(
-			"SimpleCardWidget {"
+			"SimpleCardWidget#exeCard {"
 			"  background-color: #181a24;"
 			"  border: 1px solid #2b2e42;"
 			"  border-radius: 10px;"
 			"  padding: 16px;"
+			"}"
+			"SimpleCardWidget#exeCard > QLabel, SimpleCardWidget#exeCard StrongBodyLabel, SimpleCardWidget#exeCard CaptionLabel, SimpleCardWidget#exeCard BodyLabel {"
+			"  background-color: transparent;"
+			"  border: none;"
 			"}"
 		)
 		exe_card_layout = QVBoxLayout(self.exe_card)
 		exe_card_layout.setSpacing(12)
 
 		exe_title_row = QHBoxLayout()
-		exe_title_row.addWidget(StrongBodyLabel("Game Executable"))
+		exe_title_lbl = StrongBodyLabel("Game Executable")
+		exe_title_lbl.setStyleSheet("StrongBodyLabel { background: transparent; border: none; font-size: 14px; font-weight: bold; }")
+		exe_title_row.addWidget(exe_title_lbl)
 		exe_title_row.addStretch()
 
 		self.scan_exe_btn = PushButton(FIF.SEARCH, "Auto-Detect Executables")
@@ -403,32 +412,25 @@ class ModernGameProfileInterface(QWidget):
 
 		# Discovered Executables List
 		self.discovered_exe_label = CaptionLabel("Discovered Candidates on Machine:")
-		self.discovered_exe_label.setStyleSheet("CaptionLabel { color: #858b9c; font-weight: bold; }")
+		self.discovered_exe_label.setStyleSheet("CaptionLabel { color: #858b9c; font-weight: bold; background: transparent; border: none; }")
 		self.discovered_exe_label.setVisible(False)
 		exe_card_layout.addWidget(self.discovered_exe_label)
 
-		self.discovered_exe_list = QListWidget()
-		self.discovered_exe_list.setMaximumHeight(130)
-		self.discovered_exe_list.setStyleSheet(
-			"QListWidget {"
-			"  background-color: #12131a;"
-			"  border: 1px solid #2b2e42;"
-			"  border-radius: 6px;"
-			"  color: #ffffff;"
-			"  padding: 4px;"
-			"}"
-			"QListWidget::item {"
-			"  padding: 6px 10px;"
-			"  border-radius: 4px;"
-			"}"
-			"QListWidget::item:hover {"
-			"  background-color: #26293b;"
-			"}"
-			"QListWidget::item:selected {"
-			"  background-color: #5b6cf9;"
-			"  color: #ffffff;"
-			"}"
+		self.discovered_exe_list = ListWidget()
+		self.discovered_exe_list.setObjectName("discoveredExeList")
+		_exe_list_light_qss = (
+			"ListWidget#discoveredExeList { background-color: #e8eaf0; border: 1px solid #d0d3e0; border-radius: 6px; padding: 4px; }"
+			"ListWidget#discoveredExeList::item { padding: 6px 10px; border-radius: 4px; }"
+			"ListWidget#discoveredExeList::item:hover { background-color: #e0e3ed; }"
+			"ListWidget#discoveredExeList::item:selected { background-color: #4f46e5; color: #ffffff; }"
 		)
+		_exe_list_dark_qss = (
+			"ListWidget#discoveredExeList { background-color: #12131a; border: 1px solid #2b2e42; border-radius: 6px; color: #ffffff; padding: 4px; }"
+			"ListWidget#discoveredExeList::item { padding: 6px 10px; border-radius: 4px; color: #ffffff; background: transparent; }"
+			"ListWidget#discoveredExeList::item:hover { background-color: #26293b; }"
+			"ListWidget#discoveredExeList::item:selected { background-color: #5b6cf9; color: #ffffff; }"
+		)
+		setCustomStyleSheet(self.discovered_exe_list, _exe_list_light_qss, _exe_list_dark_qss)
 		self.discovered_exe_list.itemDoubleClicked.connect(self._on_discovered_exe_double_clicked)
 		self.discovered_exe_list.setVisible(False)
 		exe_card_layout.addWidget(self.discovered_exe_list)
@@ -436,22 +438,30 @@ class ModernGameProfileInterface(QWidget):
 		info_tab_layout.addWidget(self.exe_card)
 
 		# 2. Save Paths & Locations Card
-		self.paths_card = SimpleCardWidget(self)
+		self.paths_card = SimpleCardWidget(self.scroll_content)
+		self.paths_card.setObjectName("pathsCard")
 		self.paths_card.setStyleSheet(
-			"SimpleCardWidget {"
+			"SimpleCardWidget#pathsCard {"
 			"  background-color: #181a24;"
 			"  border: 1px solid #2b2e42;"
 			"  border-radius: 10px;"
 			"  padding: 16px;"
 			"}"
+			"SimpleCardWidget#pathsCard > QLabel, SimpleCardWidget#pathsCard StrongBodyLabel, SimpleCardWidget#pathsCard CaptionLabel, SimpleCardWidget#pathsCard BodyLabel {"
+			"  background-color: transparent;"
+			"  border: none;"
+			"}"
 		)
 		paths_layout = QVBoxLayout(self.paths_card)
 		paths_layout.setSpacing(10)
-		paths_layout.addWidget(StrongBodyLabel("Configured Save Locations & Status"))
+		paths_title_lbl = StrongBodyLabel("Configured Save Locations & Status")
+		paths_title_lbl.setStyleSheet("StrongBodyLabel { background: transparent; border: none; font-size: 14px; font-weight: bold; }")
+		paths_layout.addWidget(paths_title_lbl)
 
 		self.locations_display = PlainTextEdit()
 		self.locations_display.setReadOnly(True)
-		self.locations_display.setMaximumHeight(150)
+		self.locations_display.setMinimumHeight(100)
+		self.locations_display.setMaximumHeight(180)
 		self.locations_display.setStyleSheet(
 			"PlainTextEdit, QPlainTextEdit {"
 			"  background-color: #12131a;"
@@ -656,7 +666,7 @@ class ModernGameProfileInterface(QWidget):
 		if p_path and Path(p_path).is_file():
 			pix = QPixmap(p_path)
 			if not pix.isNull():
-				fit_pixmap_to_label(self.poster_label, pix, QSize(160, 220))
+				fit_pixmap_to_label(self.poster_label, pix, self._HERO_POSTER_SIZE)
 				return
 
 		# Fallback icon
@@ -783,9 +793,10 @@ class ModernGameProfileInterface(QWidget):
 
 			# Run plugin pre-backup hook if applicable
 			if self.current_plugin is not None:
-				ensure_plugin_restore_inputs(
-					self.current_profile, self.current_plugin, self, title="Backup Setup"
-				)
+				if not ensure_plugin_restore_inputs(
+					self, self.current_profile, self.current_plugin, self.config
+				):
+					return
 				run_plugin_hook(
 					self.current_plugin,
 					"pre_backup",
@@ -876,9 +887,10 @@ class ModernGameProfileInterface(QWidget):
 		try:
 			# Review plugin restore inputs if needed
 			if self.current_plugin is not None:
-				offer_plugin_restore_input_review(
-					self.current_profile, self.current_plugin, self, title="Restore Setup"
-				)
+				if not offer_plugin_restore_input_review(
+					self, self.current_profile, self.current_plugin, self.config
+				):
+					return
 				run_plugin_hook(
 					self.current_plugin,
 					"pre_restore",
@@ -988,22 +1000,34 @@ class ModernGameProfileInterface(QWidget):
 
 		exe_path = (self.current_profile.executable_path or "").strip()
 		if not exe_path or not Path(exe_path).is_file():
-			# Ask user to select executable manually
-			InfoBar.info(
-				title="Executable Not Set",
-				content="Please select the game executable (.exe) to launch.",
-				parent=toast_parent(self),
-				position=InfoBarPosition.TOP,
-				duration=3000,
-			)
-			file_path, _ = QFileDialog.getOpenFileName(
-				self,
-				"Select Game Executable",
-				"",
-				"Executable Files (*.exe);;All Files (*.*)",
-			)
-			if not file_path:
-				return
+			# Try auto-detecting candidates first
+			candidates = self.current_profile.find_candidate_executables(self.current_plugin)
+			primary = [
+				c for c in candidates
+				if not any(ign in Path(c).name.lower() for ign in ("unins", "uninstall", "crashhandler", "crashreport", "helper", "setup", "update"))
+			]
+			auto_exe = primary[0] if primary else (candidates[0] if candidates else None)
+
+			if auto_exe and Path(auto_exe).is_file():
+				file_path = auto_exe
+			else:
+				# Ask user to select executable manually
+				InfoBar.info(
+					title="Executable Not Set",
+					content="Please select the game executable (.exe) to launch.",
+					parent=toast_parent(self),
+					position=InfoBarPosition.TOP,
+					duration=3000,
+				)
+				file_path, _ = QFileDialog.getOpenFileName(
+					self,
+					"Select Game Executable",
+					"",
+					"Executable Files (*.exe);;All Files (*.*)",
+				)
+				if not file_path:
+					return
+
 			self.current_profile.executable_path = file_path
 			self.exe_path_edit.setText(file_path)
 			if self.current_profile.id in self.config.games:
@@ -1069,8 +1093,10 @@ class ModernGameProfileInterface(QWidget):
 			self.discovered_exe_label.setVisible(True)
 			self.discovered_exe_list.setVisible(True)
 			for c in candidates:
-				item = QListWidgetItem(c)
+				item = QListWidgetItem(FIF.APPLICATION.icon(), c)
 				self.discovered_exe_list.addItem(item)
+			row_count = min(len(candidates), 5)
+			self.discovered_exe_list.setFixedHeight(row_count * 38 + 12)
 			InfoBar.success(
 				title="Executables Found",
 				content=f"Found {len(candidates)} candidate executable(s). Double-click to select.",
@@ -1152,7 +1178,7 @@ class ModernGameProfileInterface(QWidget):
 	def _on_edit_profile(self):
 		if not self.current_profile:
 			return
-		editor = ModernGameEditor(self.current_profile, self.config, self)
+		editor = ModernGameEditor(self.current_profile, self)
 		if editor.exec():
 			updated = editor.get_profile()
 			self.config.games[updated.id] = updated
@@ -1163,10 +1189,11 @@ class ModernGameProfileInterface(QWidget):
 	def _on_verify_saves(self):
 		if not self.current_profile:
 			return
-		rep = verify_save_locations_report(self.current_profile, self.current_plugin)
-		text = format_verify_report_text(rep)
-
-		dlg = FluentDialog("Save Location Verification", text, self)
-		dlg.yesButton.setText("OK")
-		dlg.cancelButton.hide()
+		dlg = VerifySaveDialog(
+			self.current_profile,
+			self.current_plugin,
+			self.config,
+			self,
+		)
 		dlg.exec()
+		self._update_save_detection_status()

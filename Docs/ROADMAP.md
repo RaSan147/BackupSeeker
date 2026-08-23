@@ -4,19 +4,19 @@ Phased direction for BackupSeeker. Items are aspirational until implemented; tra
 
 ## Near term
 
-- **Profile portability** — Import/export of profile sets (shareable JSON or documented bundle) to ease reinstalls.
-- **Retention policies** — Optional limits on backup count or age per game folder to control disk use.
-- **Scheduled backups** — Time- or idle-triggered backup (opt-in; design TBD for Windows scheduling).
+- **Profile portability** - Import/export of profile sets (shareable JSON or documented bundle) to ease reinstalls.
+- **Retention policies** - Optional limits on backup count or age per game folder to control disk use.
+- **Scheduled backups** - Time- or idle-triggered backup (opt-in; design TBD for Windows scheduling).
 
 ## Mid term
 
-- **Plugin UX** — Clearer discovery, reload feedback, and possibly a curated index shipped or linked from the app.
-- **Curated plugin index** — Maintainer-reviewed list or repo of community plugins with compatibility notes.
+- **Plugin UX** - Clearer discovery, reload feedback, and possibly a curated index shipped or linked from the app.
+- **Curated plugin index** - Maintainer-reviewed list or repo of community plugins with compatibility notes.
 
 ## Long term
 
-- **Optional cloud sync** — User opt-in only; encryption and provider choice documented before shipping.
-- **Encrypted backups** — Optional at-rest encryption for ZIP or sidecar keys (design and UX TBD).
+- **Optional cloud sync** - User opt-in only; encryption and provider choice documented before shipping.
+- **Encrypted backups** - Optional at-rest encryption for ZIP or sidecar keys (design and UX TBD).
 
 ## Ideas from plugin / engineering notes
 

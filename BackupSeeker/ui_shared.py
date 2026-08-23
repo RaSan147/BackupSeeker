@@ -6,7 +6,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 from .plugins.base import GamePlugin, RestoreInputSpec
 from .plugins.prompt_validation import validate_restore_input
@@ -121,7 +121,7 @@ def _quote(path: Path) -> str:
         return str(path)
 
 
-def open_path_in_explorer(target: Union[Path, str]) -> None:
+def open_path_in_explorer(target: Path | str) -> None:
     """Open a folder (or the parent of a file) in the platform file explorer."""
     path = Path(target)
     if not path.exists():
@@ -160,9 +160,9 @@ def format_restore_confirmation_text(details: dict, backup_filename: str) -> str
 	clear = bool(details.get("clear_before_unpack"))
 
 	if clear:
-		mode_line = "Full replace — save folders are cleared, then the backup is extracted."
+		mode_line = "Full replace - save folders are cleared, then the backup is extracted."
 	else:
-		mode_line = "Merge — files in the ZIP overwrite matching paths; other files on disk stay."
+		mode_line = "Merge - files in the ZIP overwrite matching paths; other files on disk stay."
 
 	policy = "plugin" if details.get("policy_from_plugin") else "profile default"
 
@@ -190,7 +190,7 @@ def format_restore_confirmation_text(details: dict, backup_filename: str) -> str
 			if r.get("has_existing_files"):
 				tag = "snapshot, then " + ("clear & extract" if clear else "unpack")
 			else:
-				tag = "empty — no snapshot"
+				tag = "empty - no snapshot"
 			lines.append(f"• [{r['logical_key']}] {tag}: {ep}")
 	else:
 		lines.append(f"{n_roots} save locations (paths are those configured for this profile).")
@@ -201,9 +201,9 @@ def format_restore_confirmation_text(details: dict, backup_filename: str) -> str
 
 def confirm_restore(
 	parent,
-	profile: "GameProfile",
+	profile: GameProfile,
 	plugin: object | None,
-	config: "ConfigManager",
+	config: ConfigManager,
 	backup_file: Path,
 ) -> bool:
 	"""Show detailed restore confirmation; returns True if user accepts."""
@@ -215,7 +215,7 @@ def confirm_restore(
 	msg = format_restore_confirmation_text(details, backup_file.name)
 	meta = read_archive_metadata(backup_file)
 	if meta is not None and meta.has_registry_export:
-		msg += "\n\nIncludes registry export — entries apply on Windows after files."
+		msg += "\n\nIncludes registry export - entries apply on Windows after files."
 	return confirm_action(parent, "Confirm restore", msg)
 
 
@@ -223,7 +223,7 @@ def _ensure_main_detail(spec_prompt: str) -> str:
 	return spec_prompt.strip() or _DEFAULT_ENSURE_MSG
 
 
-def _retry_main_detail(exception_message: Optional[str]) -> str:
+def _retry_main_detail(exception_message: str | None) -> str:
 	if exception_message is None:
 		return _DEFAULT_RETRY_MSG
 	text = exception_message.strip()
@@ -319,7 +319,7 @@ def prompt_plugin_input(
 	edit.setPlaceholderText(placeholder.strip() or _DEFAULT_LINE_EDIT_PLACEHOLDER)
 	edit.setMinimumHeight(28)
 
-	msg = QLabel((detail.strip() or "Details:"))
+	msg = QLabel(detail.strip() or "Details:")
 	msg.setWordWrap(True)
 	msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 	root.addWidget(msg)
@@ -403,9 +403,9 @@ def prompt_plugin_input(
 
 def ensure_plugin_restore_inputs(
 	parent,
-	profile: "GameProfile",
+	profile: GameProfile,
 	plugin: object | None,
-	config: "ConfigManager",
+	config: ConfigManager,
 ) -> bool:
 	"""Before backup/restore: collect any missing ``restore_input_specs`` via the shared path dialog.
 
@@ -422,7 +422,7 @@ def ensure_plugin_restore_inputs(
 	if not specs:
 		return True
 
-	values: Dict[str, Any] = dict(pg.profile_restore_input_values(profile))
+	values: dict[str, Any] = dict(pg.profile_restore_input_values(profile))
 
 	dirty = False
 	for spec in specs:
@@ -463,9 +463,9 @@ def ensure_plugin_restore_inputs(
 
 def offer_plugin_restore_input_review(
 	parent,
-	profile: "GameProfile",
+	profile: GameProfile,
 	plugin: object | None,
-	config: "ConfigManager",
+	config: ConfigManager,
 ) -> bool:
 	"""Optional pre-restore step: ask whether to review or change plugin path pins (``plugin_inputs``).
 
@@ -491,9 +491,9 @@ def offer_plugin_restore_input_review(
 		"Restore paths",
 		"This profile may use folder paths (install/save pins) for restore.\n\n"
 		"Do you want to review or change them before continuing?\n\n"
-		"• Yes — edit paths\n"
-		"• No — use saved values\n"
-		"• Cancel — abort restore",
+		"• Yes - edit paths\n"
+		"• No - use saved values\n"
+		"• Cancel - abort restore",
 		QMessageBox.StandardButton.Yes
 		| QMessageBox.StandardButton.No
 		| QMessageBox.StandardButton.Cancel,
@@ -504,7 +504,7 @@ def offer_plugin_restore_input_review(
 	if res != QMessageBox.StandardButton.Yes:
 		return True
 
-	values: Dict[str, Any] = dict(pg.profile_restore_input_values(profile))
+	values: dict[str, Any] = dict(pg.profile_restore_input_values(profile))
 	dirty = False
 
 	for spec in editable:
@@ -540,11 +540,11 @@ def offer_plugin_restore_input_review(
 
 def prompt_plugin_primary_path_fix(
 	parent,
-	profile: "GameProfile",
+	profile: GameProfile,
 	plugin: object | None,
-	config: "ConfigManager",
+	config: ConfigManager,
 	*,
-	detail: Optional[str] = None,
+	detail: str | None = None,
 ) -> bool:
 	"""Same folder dialog as ``ensure_plugin_restore_inputs``; persists primary pin on OK."""
 

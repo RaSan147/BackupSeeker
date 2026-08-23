@@ -6,10 +6,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QObject, QFileSystemWatcher, QTimer, pyqtSignal
+from PyQt6.QtCore import QFileSystemWatcher, QObject, QTimer, pyqtSignal
 
 if TYPE_CHECKING:
-	from .plugin_manager import PluginLoadReport, PluginManager
+	from .plugin_manager import PluginManager
 
 logger = logging.getLogger(__name__)
 

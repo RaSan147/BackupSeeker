@@ -13,11 +13,11 @@ flowchart LR
   Review --> Merge[Merge]
 ```
 
-1. **Pick or file work** — Prefer labeled `good first issue` / `help wanted`; use `bug`, `enhancement`, `plugins`, `ui`, `docs` as appropriate.
-2. **Branch** — `feature/<short-name>`, `fix/<issue-id>-<short>`, `docs/<short>`, `plugin/<game-id>`.
-3. **Implement** — One logical change set per PR; avoid unrelated refactors.
-4. **Test** — `python -m BackupSeeker.main` from a venv with [requirements.txt](../requirements.txt). Core logic: unit tests where they exist or add targeted tests for `core` behavior. UI: manual steps in the PR body (dialogs, theme, backup/restore path).
-5. **PR** — Motivation, summary, UI screenshots/GIFs if UI changed; `Closes #id` when applicable; confirm docs updated.
+1. **Pick or file work** - Prefer labeled `good first issue` / `help wanted`; use `bug`, `enhancement`, `plugins`, `ui`, `docs` as appropriate.
+2. **Branch** - `feature/<short-name>`, `fix/<issue-id>-<short>`, `docs/<short>`, `plugin/<game-id>`.
+3. **Implement** - One logical change set per PR; avoid unrelated refactors.
+4. **Test** - `python -m BackupSeeker.main` from a venv with [requirements.txt](../requirements.txt). Core logic: unit tests where they exist or add targeted tests for `core` behavior. UI: manual steps in the PR body (dialogs, theme, backup/restore path).
+5. **PR** - Motivation, summary, UI screenshots/GIFs if UI changed; `Closes #id` when applicable; confirm docs updated.
 
 ## Environment (Windows example)
 
@@ -52,5 +52,5 @@ Canonical docs live under [Docs/](README.md). When behavior or entry points chan
 
 ## Related
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — full contributor guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system structure
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - full contributor guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) - system structure

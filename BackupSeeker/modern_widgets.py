@@ -24,7 +24,7 @@ from qfluentwidgets import (
     ComboBox, StrongBodyLabel, BodyLabel, CaptionLabel,
     Dialog, StateToolTip, SplitTitleBar, RoundMenu, Action,
     FluentIcon as FIF, TeachingTip, TeachingTipTailPosition,
-    ElevatedCardWidget, setTheme, SwitchButton
+    ElevatedCardWidget, setTheme, SwitchButton, setCustomStyleSheet
 )
 
 from .core import GameProfile, PathUtils
@@ -48,8 +48,10 @@ class RoundedCard(ElevatedCardWidget):
         except Exception:
             pass
         try:
-            # Use transparent background in stylesheet to override opaque defaults
-            self.setStyleSheet("ElevatedCardWidget{background: transparent;} RoundedCard{background: transparent;}")
+            # Use setCustomStyleSheet to APPEND to qfluentwidgets' native stylesheet
+            # instead of replacing it (which breaks fluent scrollbars in children).
+            transparent_qss = "RoundedCard, ElevatedCardWidget { background: transparent; }"
+            setCustomStyleSheet(self, transparent_qss, transparent_qss)
         except Exception:
             pass
 
@@ -104,39 +106,10 @@ class ModernTitleBar(SplitTitleBar):
         super().__init__(parent)
         try:
             self.setFixedHeight(45)
+            self.setIcon(FIF.SAVE.icon())
+            self.setTitle("BackupSeeker")
         except Exception:
             pass
-
-        branding_layout = QHBoxLayout()
-        branding_layout.setContentsMargins(15, 0, 0, 0)
-        self.icon_label = QLabel()
-        try:
-            self.icon_label.setPixmap(FIF.SAVE.icon().pixmap(18, 18))
-            self.icon_label.setStyleSheet("QLabel{background: transparent;}")
-            self.icon_label.setFixedSize(20, 20)
-        except Exception:
-            pass
-
-        self.title_label = StrongBodyLabel("BackupSeeker")
-        try:
-            self.title_label.setStyleSheet("StrongBodyLabel{font-size: 14px; font-weight: bold; background: transparent; color: palette(windowText);}")
-        except Exception:
-            pass
-
-        branding_layout.addWidget(self.icon_label)
-        branding_layout.addWidget(self.title_label)
-        branding_layout.addStretch()
-
-        try:
-            # Insert branding at the start of the title bar layout
-            self.hBoxLayout.insertLayout(0, branding_layout)
-            self.hBoxLayout.insertSpacing(1, 15)
-        except Exception:
-            # If the SplitTitleBar internals differ, fall back to adding widgets
-            try:
-                self.hBoxLayout.addLayout(branding_layout)
-            except Exception:
-                pass
 
 
 class ModernGameEditor(Dialog):

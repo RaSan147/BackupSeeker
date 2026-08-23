@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from PyQt6.QtGui import QBrush, QColor
 from qfluentwidgets import TableWidget, setCustomStyleSheet
 
@@ -15,16 +13,29 @@ from ..ui_helpers import is_app_dark
 CARD_STYLE_SEMI = "RoundedCard{background: #1e202e; border: 1px solid #2b2e42; border-radius: 10px;}"
 CARD_STYLE_TRANSPARENT = "RoundedCard{background: #1e202e; border: 1px solid #2b2e42; border-radius: 10px;}"
 
-# List/widget styling
+# List/widget styling - ONLY use with QListWidget (not qfluentwidgets ListWidget).
+# For qfluentwidgets ListWidget, use apply_list_transparent_style() instead.
 LIST_STYLE_TRANSPARENT = (
-    "QListWidget{background: transparent; border:0; outline: none;} "
-    "QListWidget::item{background: transparent; border: 0; outline: none;}"
+    "ListWidget, QListWidget { background: transparent; border: none; outline: none; } "
+    "ListWidget::item, QListWidget::item { background: transparent; border: none; outline: none; }"
 )
 
-SCROLL_AREA_STYLE_TRANSPARENT = (
-    "QScrollArea{background: transparent; border:0;} "
-    "QScrollArea > QWidget > QWidget{background:transparent}"
+# Safe transparent-background style for qfluentwidgets ListWidget.
+# Appends to (rather than replacing) the native Fluent QSS so scrollbars stay intact.
+_LIST_TRANSPARENT_CUSTOM_QSS = (
+    "ListWidget { background: transparent; border: none; outline: none; } "
+    "ListWidget::item { background: transparent; border: none; outline: none; }"
 )
+
+
+def apply_list_transparent_style(list_widget) -> None:
+    """Apply transparent background to a qfluentwidgets ``ListWidget`` safely.
+
+    Uses :func:`setCustomStyleSheet` so the Fluent-native scrollbar and
+    selection QSS is preserved and only the background/border overrides are
+    appended on top.
+    """
+    setCustomStyleSheet(list_widget, _LIST_TRANSPARENT_CUSTOM_QSS, _LIST_TRANSPARENT_CUSTOM_QSS)
 
 # Dim color for inactive/installed items
 DIM_COLOR = QColor("#858b9c")
@@ -86,7 +97,7 @@ class AdaptiveThemeStyles:
         }
     }
 
-    def __init__(self, dark: Optional[bool] = None):
+    def __init__(self, dark: bool | None = None):
         self.dark = is_app_dark() if dark is None else dark
         self.theme = self.COLORS['dark'] if self.dark else self.COLORS['light']
 
@@ -110,7 +121,7 @@ class AdaptiveThemeStyles:
 
     def info_panel_stylesheet(self, object_name: str, radius: int = 10) -> str:
         """Generate stylesheet for info panels with explicit color for text."""
-        # Space before ``{`` is required — ``QWidget#id{`` fails Qt's QSS parser.
+        # Space before ``{`` is required - ``QWidget#id{`` fails Qt's QSS parser.
         return (
             f"QWidget#{object_name} {{"
             f"background: {self.theme['panel_bg']};"
@@ -230,7 +241,7 @@ class AdaptiveThemeStyles:
             "}"
         )
 
-    def apply_table_style(self, table: 'TableWidget') -> None:
+    def apply_table_style(self, table: TableWidget) -> None:
         """Apply minimal explicit text color fixes over qfluentwidgets.
         
         qfluentwidgets natively resets stylesheets at runtime.
@@ -240,7 +251,7 @@ class AdaptiveThemeStyles:
         dark_qss = self._build_table_qss(self.COLORS['dark'])
         setCustomStyleSheet(table, light_qss, dark_qss)
 
-    def apply_dialog_table_style(self, table: 'TableWidget') -> None:
+    def apply_dialog_table_style(self, table: TableWidget) -> None:
         """Light/dark table body + selection for dialogs (see :meth:`apply_table_style` for main UI)."""
 
         light_qss = self._build_dialog_table_qss(self.COLORS['light'])

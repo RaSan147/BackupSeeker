@@ -79,7 +79,7 @@ def build_restore_cli_script(
 		"- Mechanical (.py) plugins: same bundle + optional ``portable_restore(ctx)`` override.",
 		"",
 		"Steps:",
-		f"  1. Extract the ZIP (you must see _backupseeker/embed/ and your save folders).",
+		"  1. Extract the ZIP (you must see _backupseeker/embed/ and your save folders).",
 		f"  2. python {RESTORE_CLI_PATH}",
 		'"""',
 		"",

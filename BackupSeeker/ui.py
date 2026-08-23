@@ -6,22 +6,21 @@ This is a refactored version of the `MainWindow` and dialogs from
 
 from __future__ import annotations
 
-import sys
-import os
 import logging
-from datetime import datetime
+import sys
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
-from PyQt6.QtCore import Qt, QByteArray, QEvent
-from PyQt6.QtGui import QAction, QActionGroup, QFont, QPalette, QColor
+from PyQt6.QtCore import QByteArray, QEvent, Qt
+from PyQt6.QtGui import QAction, QActionGroup, QColor, QFont, QPalette
 from PyQt6.QtWidgets import (
 	QApplication,
-	QDialog,
 	QFileDialog,
 	QFormLayout,
 	QHBoxLayout,
+	QHeaderView,
 	QLabel,
 	QListWidgetItem,
 	QMainWindow,
@@ -31,12 +30,16 @@ from PyQt6.QtWidgets import (
 	QTabWidget,
 	QVBoxLayout,
 	QWidget,
-	QHeaderView,
 )
+from PyQt6.QtWidgets import QDialog as _QDialog
+
 # Default widget aliases use standard PyQt6 widgets. When running in
 # Fluent mode `BackupSeeker.ui_fluent` will inject qfluentwidgets
 # equivalents into this module at runtime (after QApplication exists).
-from PyQt6.QtWidgets import QLineEdit as _QLineEdit, QListWidget as _QListWidget, QPushButton as _QPushButton, QTextEdit as _QTextEdit, QDialog as _QDialog
+from PyQt6.QtWidgets import QLineEdit as _QLineEdit
+from PyQt6.QtWidgets import QListWidget as _QListWidget
+from PyQt6.QtWidgets import QPushButton as _QPushButton
+from PyQt6.QtWidgets import QTextEdit as _QTextEdit
 
 LineEdit = _QLineEdit
 ListWidget = _QListWidget
@@ -45,8 +48,17 @@ PrimaryPushButton = _QPushButton
 PlainTextEdit = _QTextEdit
 Dialog = _QDialog
 
-from .core import ConfigManager, GameProfile, PathUtils, clear_before_restore, run_restore
-from .plugin_manager import PluginManager
+from .core import (
+	ConfigManager,
+	GameProfile,
+	PathUtils,
+	clear_before_restore,
+	read_archive_metadata,
+	run_backup,
+	run_restore,
+	summarize_archive_metadata,
+)
+from .plugin_manager import PluginManager, format_load_report_verbose
 from .plugin_runtime import PluginHookError, format_plugin_hook_error, run_plugin_hook
 from .ui_shared import (
 	confirm_action,
@@ -142,7 +154,7 @@ class ThemeManager:
 
 
 class GameEditorDialog(Dialog):
-	def __init__(self, profile: Optional[GameProfile] = None, parent: QWidget | None = None) -> None:
+	def __init__(self, profile: GameProfile | None = None, parent: QWidget | None = None) -> None:
 		# qfluentwidgets.Dialog accepts (title, content, parent), but the
 		# default Dialog alias may be a plain QDialog. Use a best-effort
 		# constructor call so both cases work.
@@ -170,7 +182,7 @@ class GameEditorDialog(Dialog):
 
 		self.path_edit = LineEdit(self.profile.editor_primary_path_display(plug))
 		if self.profile.plugin_id:
-			self.path_edit.setPlaceholderText("Leave empty — use plugin detection")
+			self.path_edit.setPlaceholderText("Leave empty - use plugin detection")
 		else:
 			self.path_edit.setPlaceholderText("Paste path here...")
 		path_btn = PushButton("📂 Browse")
@@ -278,8 +290,6 @@ class PluginBrowserDialog(Dialog):
 			item.setData(Qt.ItemDataRole.UserRole, plugin.game_id)
 			self.list_widget.addItem(item)
 		if not report.ok:
-			from .plugin_manager import format_load_report_verbose
-
 			QMessageBox.warning(
 				self,
 				"Plugin reload issues",
@@ -329,10 +339,10 @@ class PluginBrowserDialog(Dialog):
 
 
 class MainWindow(QMainWindow):
-	def __init__(self, config: Optional[ConfigManager] = None) -> None:
+	def __init__(self, config: ConfigManager | None = None) -> None:
 		super().__init__()
 		self.config = config or ConfigManager()
-		self.current_profile: Optional[GameProfile] = None
+		self.current_profile: GameProfile | None = None
 		self._worker_thread = None
 		self.plugin_manager = PluginManager(self.config.app_dir)
 		self.config.sync_plugin_versions_from(self.plugin_manager)
@@ -646,7 +656,7 @@ class MainWindow(QMainWindow):
 		if enabled and self.current_profile is not None:
 			self.lbl_title.setText(f"🎮 {_profile_display(self.current_profile, self)}")
 			ep = self.current_profile.effective_save_path(_plugin_for_profile(self.current_profile, self))
-			self.lbl_path.setText(f"<b>Path:</b> {ep or '(from plugin — at backup)'}")
+			self.lbl_path.setText(f"<b>Path:</b> {ep or '(from plugin - at backup)'}")
 		else:
 			self.lbl_title.setText("Select a Game")
 			self.lbl_path.setText("<b>Path:</b> -")
@@ -688,8 +698,6 @@ class MainWindow(QMainWindow):
 		self._execute_backup_attempt(self.current_profile, offer_path_fix=True)
 
 	def _execute_backup_attempt(self, profile: GameProfile, *, offer_path_fix: bool) -> None:
-		from .core import run_backup
-
 		plugin = self.plugin_manager.get_plugin_for_profile(profile.plugin_id)
 		if not ensure_plugin_restore_inputs(self, profile, plugin, self.config):
 			self.log("Backup cancelled.")
@@ -741,8 +749,6 @@ class MainWindow(QMainWindow):
 		self.refresh_backups()
 
 	def refresh_backups(self) -> None:
-		from .core import ConfigManager, read_archive_metadata, summarize_archive_metadata
-
 		self.table.setRowCount(0)
 		if not self.current_profile:
 			return
@@ -997,12 +1003,10 @@ class MainWindow(QMainWindow):
 				menu_bg = "#ffffff"
 				txt = "#222222"
 				disabled_txt = "#777777"
-				disabled_bg = "#f5f5f5"
 			else:
 				menu_bg = "#2b2b2b"
 				txt = "#ffffff"
 				disabled_txt = "#777777"
-				disabled_bg = "transparent"
 			# Separate hover colors for enabled and disabled items
 			if eff == "light":
 				enabled_hover = "#e8f4ff"  # light bluish hover for actionable items

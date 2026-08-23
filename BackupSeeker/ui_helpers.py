@@ -14,8 +14,10 @@ except Exception:
 
 try:
     # Try importing config helpers directly (some installs expose this)
-    from qfluentwidgets.common.config import isDarkTheme as _qfw_cfg_is_dark  # type: ignore
-    from qfluentwidgets.common.config import qconfig, Theme  # type: ignore
+    from qfluentwidgets.common.config import Theme, qconfig  # type: ignore
+    from qfluentwidgets.common.config import (
+        isDarkTheme as _qfw_cfg_is_dark,  # type: ignore
+    )
 except Exception:
     _qfw_cfg_is_dark = None
     qconfig = None
@@ -23,8 +25,8 @@ except Exception:
 
 try:
     # PyQt imports
-    from PyQt6.QtWidgets import QApplication
     from PyQt6.QtGui import QPalette
+    from PyQt6.QtWidgets import QApplication
 except Exception:
     QApplication = None
     QPalette = None

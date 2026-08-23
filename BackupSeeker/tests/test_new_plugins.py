@@ -2,36 +2,93 @@ import unittest
 from pathlib import Path
 
 from BackupSeeker.plugin_manager import PluginManager
-from BackupSeeker.plugins.base import GamePlugin
-
-# Direct imports for all 20 new plugins
-from BackupSeeker.plugins.the_witcher_3_wild_hunt import TheWitcher3WildHuntPlugin
-from BackupSeeker.plugins.cyberpunk_2077 import Cyberpunk2077Plugin
-from BackupSeeker.plugins.elden_ring import EldenRingPlugin
-from BackupSeeker.plugins.grand_theft_auto_v import GrandTheftAutoVPlugin
-from BackupSeeker.plugins.red_dead_redemption_2 import RedDeadRedemption2Plugin
-from BackupSeeker.plugins.hades import HadesPlugin
-from BackupSeeker.plugins.skyrim import SkyrimPlugin
-from BackupSeeker.plugins.fallout_4 import Fallout4Plugin
-from BackupSeeker.plugins.minecraft import MinecraftPlugin
-from BackupSeeker.plugins.stardew_valley import StardewValleyPlugin
-
+from BackupSeeker.plugins.assassins_creed_4_black_flag import (
+	AssassinsCreed4BlackFlagPlugin,
+)
+from BackupSeeker.plugins.assassins_creed_black_flag_resynced import (
+	AssassinsCreedBlackFlagResyncedPlugin,
+)
 from BackupSeeker.plugins.baldurs_gate_3 import BaldursGate3Plugin
-from BackupSeeker.plugins.monster_hunter_world import MonsterHunterWorldPlugin
-from BackupSeeker.plugins.terraria import TerrariaPlugin
-from BackupSeeker.plugins.slay_the_spire import SlayTheSpirePlugin
-from BackupSeeker.plugins.euro_truck_simulator_2 import EuroTruckSimulator2Plugin
+from BackupSeeker.plugins.base import GamePlugin
 from BackupSeeker.plugins.cities_skylines import CitiesSkylinesPlugin
-from BackupSeeker.plugins.sekiro import SekiroPlugin
+from BackupSeeker.plugins.cyberpunk_2077 import Cyberpunk2077Plugin
 from BackupSeeker.plugins.dark_souls_3 import DarkSouls3Plugin
+from BackupSeeker.plugins.elden_ring import EldenRingPlugin
+from BackupSeeker.plugins.euro_truck_simulator_2 import EuroTruckSimulator2Plugin
+from BackupSeeker.plugins.fallout_4 import Fallout4Plugin
+from BackupSeeker.plugins.five_hearts_under_one_roof import FiveHeartsUnderOneRoofPlugin
+from BackupSeeker.plugins.grand_theft_auto_v import GrandTheftAutoVPlugin
+from BackupSeeker.plugins.hades import HadesPlugin
 from BackupSeeker.plugins.hollow_knight import HollowKnightPlugin
+from BackupSeeker.plugins.minecraft import MinecraftPlugin
+from BackupSeeker.plugins.monster_hunter_world import MonsterHunterWorldPlugin
+from BackupSeeker.plugins.red_dead_redemption_2 import RedDeadRedemption2Plugin
+from BackupSeeker.plugins.sekiro import SekiroPlugin
+from BackupSeeker.plugins.skyrim import SkyrimPlugin
+from BackupSeeker.plugins.slay_the_spire import SlayTheSpirePlugin
+from BackupSeeker.plugins.stardew_valley import StardewValleyPlugin
+from BackupSeeker.plugins.stray import StrayPlugin
 from BackupSeeker.plugins.subnautica import SubnauticaPlugin
 from BackupSeeker.plugins.sword_art_online_echoes_of_aincrad import (
 	SwordArtOnlineEchoesOfAincradPlugin,
 )
+from BackupSeeker.plugins.terraria import TerrariaPlugin
+
+# Direct imports for all 20 new plugins
+from BackupSeeker.plugins.the_witcher_3_wild_hunt import TheWitcher3WildHuntPlugin
 
 
 class TestNewPlugins(unittest.TestCase):
+	def test_steam_and_emulator_path_helpers(self) -> None:
+		stray = StrayPlugin()
+		paths = stray.get_all_steam_save_paths("1332010")
+		self.assertTrue(any("CODEX" in p for p in paths))
+		self.assertTrue(any("TENOKE" in p for p in paths))
+		self.assertTrue(any("Goldberg SteamEmu Saves" in p for p in paths))
+		self.assertTrue(any("GSE Saves" in p for p in paths))
+		self.assertTrue(any("RUNE" in p for p in paths))
+		self.assertTrue(any("FLT" in p for p in paths))
+		self.assertTrue(any("EMPRESS" in p for p in paths))
+		self.assertTrue(any("CPY_SAVES" in p for p in paths))
+
+	def test_steam_library_and_manifest_parser(self) -> None:
+		stray = StrayPlugin()
+		# get_steam_library_paths should return a list of Paths
+		libs = stray.get_steam_library_paths()
+		self.assertIsInstance(libs, list)
+
+	def test_unity_player_log_helpers(self) -> None:
+		fh = FiveHeartsUnderOneRoofPlugin()
+		# Non-existent company/product should safely return None
+		self.assertIsNone(fh.get_unity_install_path_from_log("NonExistentCompany", "NonExistentProduct"))
+		self.assertIsNone(fh.is_unity_game_installed("NonExistentCompany", "NonExistentProduct"))
+
+	def test_unified_plugins_registered(self) -> None:
+		pm = PluginManager(Path("BackupSeeker"))
+		self.assertIn("stray", pm.available_plugins)
+		self.assertIn("assassins_creed_2", pm.available_plugins)
+		self.assertIn("assassins_creed_3_remastered", pm.available_plugins)
+		self.assertIn("assassins_creed_4_black_flag", pm.available_plugins)
+		self.assertIn("assassins_creed_black_flag_resynced", pm.available_plugins)
+		self.assertIn("just_cause_3", pm.available_plugins)
+		self.assertIn("five_hearts_under_one_roof", pm.available_plugins)
+
+		ac4_plugin = pm.available_plugins["assassins_creed_4_black_flag"]
+		self.assertEqual(ac4_plugin.game_name, "Assassin's Creed IV: Black Flag")
+		self.assertEqual(ac4_plugin.game_id, "assassins_creed_4_black_flag")
+
+		resynced_plugin = pm.available_plugins["assassins_creed_black_flag_resynced"]
+		self.assertEqual(resynced_plugin.game_name, "Assassin's Creed: Black Flag Resynced")
+		self.assertEqual(resynced_plugin.game_id, "assassins_creed_black_flag_resynced")
+
+		stray_plugin = pm.available_plugins["stray"]
+		self.assertEqual(stray_plugin.game_name, "Stray")
+		self.assertEqual(stray_plugin.game_id, "stray")
+
+		fh_plugin = pm.available_plugins["five_hearts_under_one_roof"]
+		self.assertEqual(fh_plugin.game_name, "Five Hearts Under One Roof")
+		self.assertEqual(fh_plugin.game_id, "five_hearts_under_one_roof")
+
 	def test_all_new_plugins_disabled_and_valid(self) -> None:
 		pm = PluginManager(Path("BackupSeeker"))
 		
@@ -58,11 +115,13 @@ class TestNewPlugins(unittest.TestCase):
 			"hollow_knight": HollowKnightPlugin(),
 			"subnautica": SubnauticaPlugin(),
 			"sword_art_online_echoes_of_aincrad": SwordArtOnlineEchoesOfAincradPlugin(),
+			"five_hearts_under_one_roof": FiveHeartsUnderOneRoofPlugin(),
+			"assassins_creed_4_black_flag": AssassinsCreed4BlackFlagPlugin(),
+			"assassins_creed_black_flag_resynced": AssassinsCreedBlackFlagResyncedPlugin(),
 		}
 
 		for game_id, plugin in new_plugins.items():
 			with self.subTest(game_id=game_id):
-				# Verify they are correctly registered or not registered in the active plugin registry depending on is_disabled
 				if plugin.is_disabled:
 					self.assertNotIn(game_id, pm.available_plugins)
 				else:

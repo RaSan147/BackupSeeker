@@ -1,4 +1,4 @@
-# Plugin Development Guide — BackupSeeker
+# Plugin Development Guide - BackupSeeker
 
 Canonical location for this guide is **`Docs/PLUGIN_DEVELOPMENT.md`**. For how plugins are loaded at runtime, see [ARCHITECTURE.md](ARCHITECTURE.md) (sections **Layers** and **Plugins**).
 
@@ -19,7 +19,7 @@ Plugins expose one or more `GamePlugin` instances describing:
 - `game_id`: stable unique identifier (do not change once released).
 - `game_name`: user-facing label.
 - **`save_sources`**: declarative list of save “sources” (see below). This is the **canonical** shape; properties like `save_paths`, `save_locations`, and `registry_keys` are **derived** for compatibility and detection.
-- Optional `icon` / `poster` (emoji, file path, or URL — URLs are cached under `BackupSeeker/data/` by the plugin manager).
+- Optional `icon` / `poster` (emoji, file path, or URL - URLs are cached under `BackupSeeker/data/` by the plugin manager).
 - Optional `registry_keys`-style behavior via `kind: registry_windows` entries inside `save_sources`.
 - Optional lifecycle hooks and **mechanical** overrides for advanced backup/restore (see `BackupSeeker/plugins/TEMPLATE_PLUGIN.py`).
 
@@ -27,8 +27,8 @@ Plugins expose one or more `GamePlugin` instances describing:
 
 Full rules and normalization live in [`BackupSeeker/plugins/save_sources.py`](../BackupSeeker/plugins/save_sources.py) (module docstring). Each entry is a dict:
 
-- **`kind: directory`** — `id`, `paths` (contracted path strings; multiple paths under the same `id` are alternatives sharing one logical ZIP root). Optional `prompt`, `pin_relative_segments`, labels, etc.
-- **`kind: registry_windows`** — Windows install detection: `key_path`, `value_name` (pairs become `registry_keys`).
+- **`kind: directory`** - `id`, `paths` (contracted path strings; multiple paths under the same `id` are alternatives sharing one logical ZIP root). Optional `prompt`, `pin_relative_segments`, labels, etc.
+- **`kind: registry_windows`** - Windows install detection: `key_path`, `value_name` (pairs become `registry_keys`).
 
 Use forward slashes in path strings for portability on Windows.
 
@@ -36,7 +36,7 @@ Use forward slashes in path strings for portability on Windows.
 
 Always prefer environment-variable tokens (e.g. `%USERPROFILE%`, `%PUBLIC%`, `$HOME`) instead of absolute paths. The app stores contracted tokens and expands them at runtime.
 
-Between segments, use forward slashes (`/`) — valid on Windows through Python’s path APIs, and you avoid doubled backslashes or raw string literals.
+Between segments, use forward slashes (`/`) - valid on Windows through Python’s path APIs, and you avoid doubled backslashes or raw string literals. Keep each path or URL on a single unbroken line (avoid multi-line string splitting).
 
 ## 4. Registry-based detection (Windows)
 
@@ -48,14 +48,14 @@ If you only use the derived `registry_keys` property in documentation, remember 
 
 Hooks receive and return plain dictionaries; return the input unchanged if you don't modify it.
 
-- `preprocess_backup(profile_dict)` — run before backup starts (normalize paths, stage files).
-- `postprocess_backup(result_dict)` — runs after ZIP creation (e.g. add hash, upload).
-- `preprocess_restore(profile_dict)` — run before restore (create staging dirs).
-- `postprocess_restore(result_dict)` — validate restore, cleanup, notify.
+- `preprocess_backup(profile_dict)` - run before backup starts (normalize paths, stage files).
+- `postprocess_backup(result_dict)` - runs after ZIP creation (e.g. add hash, upload).
+- `preprocess_restore(profile_dict)` - run before restore (create staging dirs).
+- `postprocess_restore(result_dict)` - validate restore, cleanup, notify.
 
 ### Mechanical / portable hooks (optional)
 
-For full control of archive contents, bundle metadata, or embedded CLI restore, see **`BackupSeeker/plugins/TEMPLATE_PLUGIN.py`** — it documents `mechanical_collect_archive_rows`, `mechanical_finalize_bundle`, `portable_restore`, `mechanical_after_app_restore`, and related extension points.
+For full control of archive contents, bundle metadata, or embedded CLI restore, see **`BackupSeeker/plugins/TEMPLATE_PLUGIN.py`** - it documents `mechanical_collect_archive_rows`, `mechanical_finalize_bundle`, `portable_restore`, `mechanical_after_app_restore`, and related extension points.
 
 ## 6. Minimal Python plugin example
 
@@ -141,7 +141,7 @@ def get_plugins():
 
 ## 8. JSONC descriptor example
 
-Align with `games.template.jsonc` — use **`save_sources`** (not legacy flat `save_paths` only):
+Align with `games.template.jsonc` - use **`save_sources`** (not legacy flat `save_paths` only):
 
 ```jsonc
 {

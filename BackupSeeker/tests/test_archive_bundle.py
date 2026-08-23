@@ -59,7 +59,8 @@ class TestBundleFormat1(unittest.TestCase):
 	def test_gather_archive_rows_deduplication(self) -> None:
 		import os
 		import time
-		from BackupSeeker.core import _gather_archive_rows, GameProfile
+
+		from BackupSeeker.core import GameProfile, _gather_archive_rows
 		from BackupSeeker.plugins.base import GamePlugin
 
 		with tempfile.TemporaryDirectory() as td:
@@ -129,7 +130,7 @@ class TestBundleFormat1(unittest.TestCase):
 			self.assertEqual(arcnames["save_folder/file2.txt"], f2_d1)
 
 	def test_gather_archive_rows_same_directory(self) -> None:
-		from BackupSeeker.core import _gather_archive_rows, GameProfile
+		from BackupSeeker.core import GameProfile, _gather_archive_rows
 		from BackupSeeker.plugins.base import GamePlugin
 
 		with tempfile.TemporaryDirectory() as td:

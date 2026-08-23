@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import importlib
 import hashlib
-import logging
+import importlib
 import json
+import logging
 import pkgutil
+import shutil
 import sys
+import threading
 import time
 import traceback
+import urllib.parse
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List
-import shutil
-import urllib.parse
-import threading
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -21,7 +21,7 @@ from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
 
-# Shared plugin infrastructure — not game plugins; never reported as load warnings.
+# Shared plugin infrastructure - not game plugins; never reported as load warnings.
 _PLUGIN_SUPPORT_MODULES = frozenset({
 	"base",
 	"prompt_validation",
@@ -44,10 +44,10 @@ class PluginLoadIssue:
 class PluginLoadReport:
 	"""Outcome of a plugin discovery/reload pass."""
 
-	issues: List[PluginLoadIssue] = field(default_factory=list)
+	issues: list[PluginLoadIssue] = field(default_factory=list)
 	loaded_count: int = 0
 	code_module_count: int = 0
-	purged_modules: List[str] = field(default_factory=list)
+	purged_modules: list[str] = field(default_factory=list)
 	duration_ms: float = 0.0
 	hot: bool = False
 
@@ -74,7 +74,7 @@ def _issue_from_exception(
 	tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
 	head = f"{type(exc).__name__}: {exc}"
 	if context:
-		head = f"{context} — {head}"
+		head = f"{context} - {head}"
 	return PluginLoadIssue(severity=severity, source=source, message=head, detail=tb)
 
 
@@ -105,7 +105,7 @@ def format_load_report_verbose(report: PluginLoadReport) -> str:
 		lines.append("")
 		lines.append("Purged modules:")
 		for name in report.purged_modules[:40]:
-			lines.append(f"  - {name}")
+			lines.append(f" - {name}")
 		if len(report.purged_modules) > 40:
 			lines.append(f"  … and {len(report.purged_modules) - 40} more")
 	if report.issues:
@@ -156,7 +156,7 @@ class PluginManager:
 	def __init__(self, base_dir: Path) -> None:
 		self.base_dir = base_dir
 		self.plugins_dir = base_dir / "plugins"
-		self.available_plugins: Dict[str, object] = {}
+		self.available_plugins: dict[str, object] = {}
 		# directory to store downloaded/copied plugin assets (images)
 		self.data_dir = Path(base_dir) / "data"
 		self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -166,10 +166,10 @@ class PluginManager:
 		self.on_reload: Callable[[PluginLoadReport], None] | None = None
 		self.on_visual_assets_ready: Callable[[object], None] | None = None
 		self._asset_loading: set[str] = set()
-		self._asset_callbacks: Dict[str, List[callable]] = {}
-		self._asset_locks: Dict[str, threading.RLock] = {}
+		self._asset_callbacks: dict[str, list[callable]] = {}
+		self._asset_locks: dict[str, threading.RLock] = {}
 		self._download_semaphore = threading.Semaphore(2)
-		self._asset_retry_after: Dict[str, float] = {}
+		self._asset_retry_after: dict[str, float] = {}
 		self.last_load_report: PluginLoadReport = PluginLoadReport()
 		self.reload_plugins(hot=False)
 
@@ -194,7 +194,7 @@ class PluginManager:
 		return s
 
 	@property
-	def plugins(self) -> Dict[str, object]:
+	def plugins(self) -> dict[str, object]:
 		return self.available_plugins
 
 	def load_plugins(self) -> PluginLoadReport:
@@ -210,8 +210,8 @@ class PluginManager:
 		"""
 
 		start = time.perf_counter()
-		issues: List[PluginLoadIssue] = []
-		purged: List[str] = []
+		issues: list[PluginLoadIssue] = []
+		purged: list[str] = []
 		prev_ids = set(self.available_plugins.keys())
 
 		if hot:
@@ -257,12 +257,12 @@ class PluginManager:
 		pkg_name = __package__.rsplit(".", 1)[0]
 		return f"{pkg_name}.plugins."
 
-	def _purge_plugin_package_modules(self) -> List[str]:
+	def _purge_plugin_package_modules(self) -> list[str]:
 		"""Drop cached plugin package modules so hot reload picks up file edits."""
 
 		prefix = self._plugins_package_prefix()
 		pkg_root = prefix.rstrip(".")
-		purged: List[str] = []
+		purged: list[str] = []
 		for name in list(sys.modules.keys()):
 			if name == pkg_root or name.startswith(prefix):
 				del sys.modules[name]
@@ -285,7 +285,7 @@ class PluginManager:
 		self,
 		plugin: object,
 		source: str,
-		issues: List[PluginLoadIssue],
+		issues: list[PluginLoadIssue],
 	) -> None:
 		gid = (getattr(plugin, "game_id", "") or "").strip()
 		if not gid:
@@ -323,7 +323,7 @@ class PluginManager:
 		try:
 			raw = json.loads(idx_path.read_text(encoding="utf-8"))
 		except Exception:
-			logging.exception("Invalid plugin_index.json — ignoring")
+			logging.exception("Invalid plugin_index.json - ignoring")
 			return None, set()
 		if not isinstance(raw, dict):
 			return None, set()
@@ -335,8 +335,8 @@ class PluginManager:
 		disabled = {str(x).strip() for x in disabled_raw} if isinstance(disabled_raw, list) else set()
 		return allowed, disabled
 
-	def _load_code_plugins(self) -> tuple[int, List[PluginLoadIssue]]:
-		issues: List[PluginLoadIssue] = []
+	def _load_code_plugins(self) -> tuple[int, list[PluginLoadIssue]]:
+		issues: list[PluginLoadIssue] = []
 		module_count = 0
 		if not self.plugins_dir.exists():
 			issues.append(
@@ -443,8 +443,8 @@ class PluginManager:
 				issues.append(_issue_from_exception(source, exc, context="import module"))
 		return module_count, issues
 
-	def _load_json_plugins(self) -> List[PluginLoadIssue]:
-		issues: List[PluginLoadIssue] = []
+	def _load_json_plugins(self) -> list[PluginLoadIssue]:
+		issues: list[PluginLoadIssue] = []
 		_GamePlugin, plugin_from_json = self._plugins_base()
 		jsonc_path = self.plugins_dir / "games.jsonc"
 		if not jsonc_path.exists():
@@ -495,8 +495,8 @@ class PluginManager:
 				issues.append(_issue_from_exception(entry_source, exc, context="plugin_from_json"))
 		return issues
 
-	def detect_games(self) -> List[Dict]:
-		detected: List[Dict] = []
+	def detect_games(self) -> list[dict]:
+		detected: list[dict] = []
 		for plugin in self.available_plugins.values():
 			if plugin.is_detected():
 				detected.append(plugin.to_profile())
@@ -535,7 +535,7 @@ class PluginManager:
 			pass
 
 		# Poster/icon URLs are not necessarily Wikipedia. Only add Wikipedia-style Referer on
-		# Wikimedia/Wikipedia hosts (their CDN expects it). Other origins: omit Referer — a
+		# Wikimedia/Wikipedia hosts (their CDN expects it). Other origins: omit Referer - a
 		# mismatched or fake Referer looks like spoofing and some CDNs/firewalls drop it.
 		headers = {
 			"User-Agent": "BackupSeeker/1.0 (desktop game save backup tool)",
@@ -687,7 +687,7 @@ class PluginManager:
 			if dest is None:
 				return False
 			return not self._asset_cache_hit(dest)
-		# Emoji / inline icons — nothing to download or cache.
+		# Emoji / inline icons - nothing to download or cache.
 		return False
 
 	def hydrate_plugin_from_cache(self, plugin: object) -> bool:
@@ -723,7 +723,7 @@ class PluginManager:
 
 	def _finish_visual_asset_callbacks(self, plugin: object) -> None:
 		gid = (getattr(plugin, "game_id", "") or "").strip()
-		callbacks: List[callable] = []
+		callbacks: list[callable] = []
 		if gid:
 			with self._asset_lock_for(gid):
 				self._asset_loading.discard(gid)

@@ -1,61 +1,45 @@
 from __future__ import annotations
 
-import os
-from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-from PyQt6.QtCore import QEvent, QPoint, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QIcon, QPixmap
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
 	QAbstractItemView,
-	QApplication,
 	QFrame,
-	QGridLayout,
 	QHBoxLayout,
 	QHeaderView,
 	QLabel,
 	QListView,
-	QListWidget,
 	QListWidgetItem,
-	QSizePolicy,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
 )
-
 from qfluentwidgets import (
-	BodyLabel,
+	Action,
 	CaptionLabel,
-	CardWidget,
 	ComboBox,
-	Dialog as FluentDialog,
-	ElevatedCardWidget,
-	FluentIcon as FIF,
 	InfoBar,
 	InfoBarPosition,
 	LineEdit,
+	ListWidget,
 	PrimaryPushButton,
 	PushButton,
 	RoundMenu,
-	Action,
-	SimpleCardWidget,
 	StrongBodyLabel,
-	SubtitleLabel,
 	TableWidget,
-	TitleLabel,
-	TransparentPushButton,
+)
+from qfluentwidgets import (
+	FluentIcon as FIF,
 )
 
-from ..core import ConfigManager, GameProfile, PathUtils, run_backup
-from ..developer_mode import set_dev_widgets_visible
+from ..core import ConfigManager, GameProfile, run_backup
 from ..fluent_window import resolve_plugin_for_profile, toast_parent
 from ..modern_widgets import ModernGameEditor, RoundedCard
-from ..ui_shared import confirm_action, open_path_in_explorer
+from ..ui_shared import confirm_action
 from .helpers import (
 	_install_read_only_table,
-	_profile_display_name,
-	_profile_kind_prefix,
 	apply_combo_ui_view,
 	last_backup_label,
 	ui_view_mode_from_combo_text,
@@ -67,11 +51,11 @@ from .profile_visuals import (
 	elide_multiline_text,
 	fit_pixmap_to_label,
 )
-from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT
+from .styles import LIST_STYLE_TRANSPARENT, AdaptiveThemeStyles, apply_list_transparent_style
 
 
 class GameCardWidget(RoundedCard):
-	"""Modern Hydra-style game card for Library & Store grids."""
+	"""Modern game card for Library & Store grids."""
 
 	clicked = pyqtSignal()
 	profile_requested = pyqtSignal()
@@ -88,16 +72,22 @@ class GameCardWidget(RoundedCard):
 		self.setFixedSize(260, 270)
 		self.setCursor(Qt.CursorShape.PointingHandCursor)
 
+		is_dark = (self.config.theme or "dark").lower() != "light"
+		bg_card = "#1a1c26" if is_dark else "#ffffff"
+		bg_card_hover = "#222534" if is_dark else "#f0f2f8"
+		border_color = "#2b2e42" if is_dark else "#e0e3ed"
+		accent_color = "#5b6cf9" if is_dark else "#4f46e5"
+
 		self.setStyleSheet(
-			"RoundedCard {"
-			"  background-color: #1a1c26;"
-			"  border: 1px solid #2b2e42;"
-			"  border-radius: 10px;"
-			"}"
-			"RoundedCard:hover {"
-			"  background-color: #222534;"
-			"  border: 1px solid #5b6cf9;"
-			"}"
+			f"GameCardWidget {{"
+			f"  background-color: {bg_card};"
+			f"  border: 1px solid {border_color};"
+			f"  border-radius: 10px;"
+			f"}}"
+			f"GameCardWidget:hover {{"
+			f"  background-color: {bg_card_hover};"
+			f"  border: 1px solid {accent_color};"
+			f"}}"
 		)
 
 		layout = QVBoxLayout(self)
@@ -107,12 +97,13 @@ class GameCardWidget(RoundedCard):
 		# Poster Area
 		self.poster_frame = QFrame(self)
 		self.poster_frame.setFixedSize(240, 135)
+		frame_bg = "#12131a" if is_dark else "#eaedf5"
 		self.poster_frame.setStyleSheet(
-			"QFrame {"
-			"  background-color: #12131a;"
-			"  border: 1px solid #26293b;"
-			"  border-radius: 6px;"
-			"}"
+			f"QFrame {{"
+			f"  background-color: {frame_bg};"
+			f"  border: 1px solid {border_color};"
+			f"  border-radius: 6px;"
+			f"}}"
 		)
 		p_layout = QVBoxLayout(self.poster_frame)
 		p_layout.setContentsMargins(0, 0, 0, 0)
@@ -290,11 +281,11 @@ class ModernLibraryInterface(QWidget):
 		self.content_layout.setSpacing(12)
 
 		# 1. Cards Grid View
-		self.card_list = QListWidget()
+		self.card_list = ListWidget()
 		self.card_list.setViewMode(QListView.ViewMode.IconMode)
 		self.card_list.setGridSize(self._CARD_GRID_SIZE)
 		self.card_list.setSpacing(12)
-		self.card_list.setStyleSheet(LIST_STYLE_TRANSPARENT)
+		apply_list_transparent_style(self.card_list)
 		self.card_list.setDragEnabled(False)
 		self.card_list.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
 		self.card_list.setMovement(QListView.Movement.Static)
@@ -479,7 +470,7 @@ class ModernLibraryInterface(QWidget):
 
 	def _on_add_custom_game(self):
 		"""Open modern game editor to create a custom profile."""
-		editor = ModernGameEditor(None, self.config, self)
+		editor = ModernGameEditor(parent=self)
 		if editor.exec():
 			new_prof = editor.get_profile()
 			self.config.games[new_prof.id] = new_prof
