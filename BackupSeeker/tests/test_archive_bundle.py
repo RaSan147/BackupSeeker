@@ -167,6 +167,54 @@ class TestBundleFormat1(unittest.TestCase):
 			self.assertEqual(len(rows), 1)
 			self.assertEqual(rows[0][1], f1)
 
+	def test_wildcard_path_backup_and_restore(self) -> None:
+		from BackupSeeker.core import ConfigManager, GameProfile, PathUtils, run_backup, run_restore, verify_save_locations_report
+		from BackupSeeker.plugins.base import GamePlugin
+
+		self.assertTrue(PathUtils.has_wildcard("C:/Users/*/AppData"))
+		self.assertTrue(PathUtils.has_wildcard("C:/Users/?/AppData"))
+		self.assertFalse(PathUtils.has_wildcard("C:/Users/test/AppData"))
+
+		with tempfile.TemporaryDirectory() as td:
+			base = Path(td)
+			acc1_saves = base / "savegames" / "user_alpha" / "12345"
+			acc2_saves = base / "savegames" / "user_beta" / "12345"
+			acc1_saves.mkdir(parents=True)
+			acc2_saves.mkdir(parents=True)
+
+			(acc1_saves / "slot1.sav").write_text("save_data_1")
+			(acc2_saves / "slot2.sav").write_text("save_data_2")
+
+			wildcard_pattern = f"{base.as_posix()}/savegames/*/12345"
+
+			class WildcardPlugin(GamePlugin):
+				game_id = "wildcard_game"
+				game_name = "Wildcard Game"
+				save_sources = [
+					{
+						"id": "ubi_saves",
+						"kind": "directory",
+						"paths": [wildcard_pattern],
+					}
+				]
+
+			plug = WildcardPlugin()
+			prof = GameProfile(id="wildcard_prof", plugin_id="wildcard_game")
+			cfg = ConfigManager()
+			cfg.config_dir = base / "config"
+			cfg.backups_dir = base / "backups"
+
+			rep = verify_save_locations_report(prof, plug)
+			self.assertGreaterEqual(len(rep["locations"]), 2)
+
+			dest_zip = base / "backup.zip"
+			run_backup(prof, cfg, plug, dest_zip=dest_zip)
+			self.assertTrue(dest_zip.exists())
+
+			# Test restore into cleared directories
+			run_restore(prof, cfg, dest_zip, plug, clear_first=True)
+			self.assertTrue((acc1_saves / "slot1.sav").exists())
+
 
 if __name__ == "__main__":
 	unittest.main()

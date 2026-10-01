@@ -940,7 +940,7 @@ class MainWindow(QMainWindow):
 			if not self.current_profile.plugin_id:
 				self.current_profile.save_path = profile_dict.get("save_path", self.current_profile.save_path)
 		try:
-			run_restore(self.current_profile, self.config, fpath, clear_before_restore(plugin), plugin)
+			run_restore(self.current_profile, self.config, fpath, plugin)
 		except PluginHookError as e:
 			self.log(format_plugin_hook_error(e))
 			QMessageBox.critical(self, "Plugin error", format_plugin_hook_error(e))

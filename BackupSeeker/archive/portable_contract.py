@@ -26,6 +26,17 @@ def _strip_wrapping_quotes(s: str) -> str:
 def expand_contracted(path_str: str) -> Path:
 	if not path_str:
 		return Path("")
+	if "*" in path_str or "?" in path_str:
+		import glob
+		expanded = os.path.expanduser(os.path.expandvars(path_str))
+		try:
+			matched = [Path(p) for p in glob.glob(expanded, recursive=True)]
+			if matched:
+				return matched[0]
+		except Exception:
+			pass
+		safe = path_str.replace("*", "default").replace("?", "1")
+		return Path(os.path.expanduser(os.path.expandvars(safe)))
 	expanded = os.path.expandvars(path_str)
 	expanded = os.path.expanduser(expanded)
 	return Path(expanded)
@@ -225,9 +236,12 @@ class PortableRestoreContext:
 					print(f"[{sk}] skipped.")
 					continue
 
-			if clear_first and dest.exists():
-				shutil.rmtree(dest)
-			dest.mkdir(parents=True, exist_ok=True)
+			try:
+				if clear_first and dest.exists():
+					shutil.rmtree(dest)
+				dest.mkdir(parents=True, exist_ok=True)
+			except Exception as ex:
+				print(f"warning: could not prepare destination {dest}: {ex}", file=sys.stderr)
 
 			n = 0
 			for dirpath, _, filenames in os.walk(src_dir):

@@ -662,14 +662,16 @@ class GamePlugin(ABC):
 		if root_dir.exists() and root_dir.is_dir():
 			try:
 				for account_dir in root_dir.iterdir():
-					if account_dir.is_dir():
+					if account_dir.is_dir() and account_dir.name not in ("0", "anonymous"):
 						game_save_dir = account_dir / u_id
 						if game_save_dir.exists() and game_save_dir.is_dir():
 							out.append(PathUtils.contract(str(game_save_dir)))
+				if not out:
+					for account_dir in root_dir.iterdir():
+						if account_dir.is_dir() and account_dir.name not in ("0", "anonymous"):
+							out.append(PathUtils.contract(str(account_dir / u_id)))
 			except Exception:
 				pass
-		if not out:
-			out.append(f"%LOCALAPPDATA%/Ubisoft Game Launcher/savegames/*/{u_id}")
 		return out
 
 	@classmethod

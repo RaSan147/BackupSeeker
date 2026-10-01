@@ -48,6 +48,7 @@ from ..core import (
 	ConfigManager,
 	GameProfile,
 	PathUtils,
+	clear_before_restore,
 	read_archive_metadata,
 	run_backup,
 	run_restore,
@@ -857,15 +858,7 @@ class ModernGameProfileInterface(SingleDirectionScrollArea):
 			self.config.save_config()
 			self.profiles_changed.emit()
 
-		dlg = RestoreBackupDialog(self.config, self)
-		# Pre-select current profile
-		if hasattr(dlg, "profile_combo"):
-			for i in range(dlg.profile_combo.count()):
-				data = dlg.profile_combo.itemData(i)
-				if data and getattr(data, "id", None) == self.current_profile.id:
-					dlg.profile_combo.setCurrentIndex(i)
-					break
-
+		dlg = RestoreBackupDialog(self.current_profile, self.config, self)
 		if dlg.exec():
 			self._refresh_backups()
 			self._update_save_detection_status()

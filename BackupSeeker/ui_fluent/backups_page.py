@@ -516,7 +516,7 @@ class ModernBackupsInterface(QWidget):
                     self.current_profile.save_path = profile_dict.get(
                         "save_path", self.current_profile.save_path
                     )
-            run_restore(self.current_profile, self.config, backup_file, clear_before_restore(plug), plug)
+            run_restore(self.current_profile, self.config, backup_file, plug)
             InfoBar.success(
                 "Restore Complete",
                 "Backup restored successfully",

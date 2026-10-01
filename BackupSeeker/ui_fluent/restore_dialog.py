@@ -354,7 +354,7 @@ class RestoreBackupDialog(QDialog):
                 profile_dict = run_plugin_hook(self._plug, "preprocess_restore", profile_dict)
                 if not self.profile.plugin_id:
                     self.profile.save_path = profile_dict.get("save_path", self.profile.save_path)
-            run_restore(self.profile, self.config, Path(backup_file), clear_before_restore(self._plug), self._plug)
+            run_restore(self.profile, self.config, Path(backup_file), self._plug)
             if self._plug is not None:
                 run_plugin_hook(self._plug, "postprocess_restore", {"backup_path": str(backup_file)})
             InfoBar.success(

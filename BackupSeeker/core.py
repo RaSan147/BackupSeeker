@@ -8,6 +8,7 @@ without any GUI wiring so other tools can call into it.
 from __future__ import annotations
 
 import fnmatch
+import glob
 import json
 import logging
 import os
@@ -213,6 +214,27 @@ class PathUtils:
 					return os.path.join(f"${var_name}", clean_remaining)
 		return abs_path
 
+	@staticmethod
+	def has_wildcard(path_str: str) -> bool:
+		"""Check if a path string contains glob wildcard characters (* or ?)."""
+		if not path_str:
+			return False
+		return "*" in path_str or "?" in path_str
+
+	@staticmethod
+	def expand_wildcards(path_str: str) -> list[Path]:
+		"""Expand environment variables and resolve any glob patterns to existing filesystem paths."""
+		if not path_str:
+			return []
+		if not PathUtils.has_wildcard(path_str):
+			return [PathUtils.expand(path_str)]
+		expanded_base = str(PathUtils.expand(path_str))
+		try:
+			matched = [Path(p) for p in glob.glob(expanded_base, recursive=True)]
+			return matched
+		except Exception:
+			return []
+
 
 def sanitize_location_key(key: str) -> str:
 	"""Stable folder name inside backup ZIP archives."""
@@ -311,25 +333,60 @@ def verify_save_locations_report(profile: GameProfile, plugin: object | None) ->
 
 	location_rows: list[dict[str, Any]] = []
 	for logical_key, contracted in locs:
-		root = PathUtils.expand(contracted)
-		exists = root.exists()
-		nfiles = 0
-		if exists:
-			try:
-				nfiles = len(collect_files_under(root.resolve(), patterns))
-			except OSError:
-				nfiles = 0
-		location_rows.append(
-			{
-				"logical_key": logical_key,
-				"label": label_map.get(logical_key, ""),
-				"contracted_path": contracted,
-				"expanded_path": str(root),
-				"exists": exists,
-				"file_count": nfiles,
-				"has_data": nfiles > 0,
-			}
-		)
+		if PathUtils.has_wildcard(contracted):
+			matching = PathUtils.expand_wildcards(contracted)
+			if matching:
+				for root in matching:
+					exists = root.exists()
+					nfiles = 0
+					if exists:
+						try:
+							nfiles = len(collect_files_under(root.resolve(), patterns))
+						except OSError:
+							nfiles = 0
+					location_rows.append(
+						{
+							"logical_key": logical_key,
+							"label": label_map.get(logical_key, ""),
+							"contracted_path": PathUtils.contract(str(root)),
+							"expanded_path": str(root),
+							"exists": exists,
+							"file_count": nfiles,
+							"has_data": nfiles > 0,
+						}
+					)
+			else:
+				location_rows.append(
+					{
+						"logical_key": logical_key,
+						"label": label_map.get(logical_key, ""),
+						"contracted_path": contracted,
+						"expanded_path": str(PathUtils.expand(contracted)),
+						"exists": False,
+						"file_count": 0,
+						"has_data": False,
+					}
+				)
+		else:
+			root = PathUtils.expand(contracted)
+			exists = root.exists()
+			nfiles = 0
+			if exists:
+				try:
+					nfiles = len(collect_files_under(root.resolve(), patterns))
+				except OSError:
+					nfiles = 0
+			location_rows.append(
+				{
+					"logical_key": logical_key,
+					"label": label_map.get(logical_key, ""),
+					"contracted_path": contracted,
+					"expanded_path": str(root),
+					"exists": exists,
+					"file_count": nfiles,
+					"has_data": nfiles > 0,
+				}
+			)
 
 	reg_rows: list[dict[str, Any]] = []
 	pg = _pr.as_game_plugin(plugin)
@@ -1032,39 +1089,45 @@ def _gather_archive_rows(
 		seen_roots: set[tuple[str, Path]] = set()
 		for logical_key, contracted in locs:
 			key = zip_sanitized_key(logical_key, plugin)
-			root = PathUtils.expand(contracted)
-			hints.append(f"{logical_key}->{contracted}")
-
-			if not root.exists():
+			roots = PathUtils.expand_wildcards(contracted) if PathUtils.has_wildcard(contracted) else [PathUtils.expand(contracted)]
+			if not roots:
 				root_diagnostics.append(
 					f"{logical_key}: folder does not exist ({contracted})"
 				)
 				continue
-			try:
-				root_res = root.resolve()
-			except Exception:
-				root_res = root
+			for root in roots:
+				hints.append(f"{logical_key}->{contracted}")
 
-			if (key, root_res) in seen_roots:
-				continue
-			seen_roots.add((key, root_res))
-
-			try:
-				files = collect_files_under(root, patterns, exclude_globs=exclude_globs)
-			except OSError:
-				continue
-			for fpath in files:
-				try:
-					rel = fpath.relative_to(root_res)
-				except ValueError:
+				if not root.exists():
+					root_diagnostics.append(
+						f"{logical_key}: folder does not exist ({contracted})"
+					)
 					continue
-				archive_rows.append((key, fpath, rel))
+				try:
+					root_res = root.resolve()
+				except Exception:
+					root_res = root
 
-			if not files:
-				pat_hint = ", ".join(patterns) if patterns else "*"
-				root_diagnostics.append(
-					f"{logical_key}: folder exists but no files matched patterns [{pat_hint}] ({contracted})"
-				)
+				if (key, root_res) in seen_roots:
+					continue
+				seen_roots.add((key, root_res))
+
+				try:
+					files = collect_files_under(root, patterns, exclude_globs=exclude_globs)
+				except OSError:
+					continue
+				for fpath in files:
+					try:
+						rel = fpath.relative_to(root_res)
+					except ValueError:
+						continue
+					archive_rows.append((key, fpath, rel))
+
+				if not files:
+					pat_hint = ", ".join(patterns) if patterns else "*"
+					root_diagnostics.append(
+						f"{logical_key}: folder exists but no files matched patterns [{pat_hint}] ({contracted})"
+					)
 
 	# Deduplicate archive_rows based on target arcname inside the ZIP archive.
 	# Keep the one with the latest modification time if duplicate names exist.
@@ -1249,13 +1312,18 @@ def _unique_expand_roots(locs: list[tuple[str, str]]) -> list[Path]:
 	out: list[Path] = []
 	for _, contracted in locs:
 		try:
-			p = PathUtils.expand(contracted).resolve()
+			roots = PathUtils.expand_wildcards(contracted) if PathUtils.has_wildcard(contracted) else [PathUtils.expand(contracted)]
 		except Exception:
 			continue
-		key = str(p)
-		if key not in seen:
-			seen.add(key)
-			out.append(p)
+		for p in roots:
+			try:
+				p_res = p.resolve()
+			except Exception:
+				p_res = p
+			key = str(p_res)
+			if key not in seen:
+				seen.add(key)
+				out.append(p_res)
 	return out
 
 
@@ -1263,18 +1331,17 @@ def run_restore(
 	profile: GameProfile,
 	config: ConfigManager,
 	backup_file: Path,
-	clear_first: bool,
 	plugin: object | None = None,
 	*,
+	clear_first: bool | None = None,
 	restore_registry: bool | None = None,
 ) -> None:
-	"""Restore from a bundle archive (``bundle.json`` format 1 only)."""
+	"""Restore save files from a bundle archive (``bundle.json`` format 1 only)."""
 
 	from .registry_win import import_registry_entries
 
-	locs = profile.effective_save_locations(plugin)
-	if not locs:
-		raise FileNotFoundError("No save locations configured for this profile.")
+	if clear_first is None:
+		clear_first = clear_before_restore(plugin)
 
 	meta = read_archive_metadata(backup_file)
 	if meta is None:
@@ -1283,6 +1350,18 @@ def run_restore(
 		)
 
 	raw = meta.raw
+	locs = profile.effective_save_locations(plugin)
+	if not locs and isinstance(raw, dict):
+		roots_meta = raw.get("roots")
+		if isinstance(roots_meta, list):
+			locs = [
+				(str(r.get("logical_key") or r.get("sanitized_key") or "loc"), str(r.get("contracted_save_path")))
+				for r in roots_meta
+				if isinstance(r, dict) and r.get("contracted_save_path")
+			]
+
+	if not locs:
+		raise FileNotFoundError("No save locations configured for this profile.")
 	gm = raw.get("game")
 	if isinstance(gm, dict) and isinstance(gm.get("plugin_id"), str):
 		arch_pid = gm["plugin_id"].strip()
@@ -1296,6 +1375,14 @@ def run_restore(
 	map_sk_to_contracted: dict[str, str] = {}
 	for logical_key, contracted in locs:
 		map_sk_to_contracted[zip_sanitized_key(logical_key, plugin)] = contracted
+
+	# Fallback from bundle manifest roots if some key isn't in current profile
+	for r in raw.get("roots", []):
+		if isinstance(r, dict):
+			sk_entry = r.get("sanitized_key")
+			cp_entry = r.get("contracted_save_path")
+			if sk_entry and cp_entry and sk_entry not in map_sk_to_contracted:
+				map_sk_to_contracted[sk_entry] = cp_entry
 
 	bmf = _archive_ns.constants.BUNDLE_FORMAT_VERSION
 	ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -1314,9 +1401,12 @@ def run_restore(
 	)
 
 	for dest in _unique_expand_roots(locs):
-		if clear_first and dest.exists():
-			shutil.rmtree(dest)
-		dest.mkdir(parents=True, exist_ok=True)
+		try:
+			if clear_first and dest.exists():
+				shutil.rmtree(dest)
+			dest.mkdir(parents=True, exist_ok=True)
+		except Exception:
+			logging.warning("Could not prepare restore destination directory %s", dest, exc_info=True)
 
 	with zipfile.ZipFile(backup_file, "r") as zf:
 		for info in zf.infolist():
@@ -1342,7 +1432,15 @@ def run_restore(
 				raise RuntimeError(
 					f"Refusing to extract oversized entry ({info.file_size} bytes): {name!r}"
 				)
-			dest_root = PathUtils.expand(contracted)
+			if PathUtils.has_wildcard(contracted):
+				resolved_roots = PathUtils.expand_wildcards(contracted)
+				if resolved_roots:
+					dest_root = resolved_roots[0]
+				else:
+					safe_contracted = contracted.replace("*", "default").replace("?", "1")
+					dest_root = PathUtils.expand(safe_contracted)
+			else:
+				dest_root = PathUtils.expand(contracted)
 			out_path = dest_root / rest.replace("/", os.sep)
 			out_path.parent.mkdir(parents=True, exist_ok=True)
 			with zf.open(info) as src, open(out_path, "wb") as dst:
