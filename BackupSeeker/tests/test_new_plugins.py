@@ -134,6 +134,36 @@ class TestNewPlugins(unittest.TestCase):
 				self.assertTrue(plugin.poster.startswith("http"))
 				self.assertTrue(len(plugin.save_sources) > 0)
 
+	def test_smart_crack_and_install_detection(self) -> None:
+		import tempfile
+		from BackupSeeker.plugins.base import GamePlugin
+
+		with tempfile.TemporaryDirectory() as td:
+			game_dir = Path(td)
+			# Test Goldberg signature
+			(game_dir / "steam_settings").mkdir()
+			(game_dir / "steam_settings" / "local_save.txt").write_text("1")
+			res = GamePlugin.detect_crack_signatures(game_dir)
+			self.assertTrue(res["detected"])
+			self.assertEqual(res["crack_name"], "Goldberg Steam Emulator")
+			self.assertTrue(res["is_portable"])
+
+			# Test CODEX / TENOKE signature
+			(game_dir / "steam_settings" / "local_save.txt").unlink()
+			(game_dir / "steam_settings").rmdir()
+			emu_ini = game_dir / "steam_emu.ini"
+			emu_ini.write_text("[Settings]\nUserName=TENOKE\nAppId=1332010\n")
+			res_tenoke = GamePlugin.detect_crack_signatures(game_dir)
+			self.assertTrue(res_tenoke["detected"])
+			self.assertEqual(res_tenoke["crack_name"], "TENOKE Repack")
+
+		# Verify new emulators are included in get_all_steam_save_paths
+		stray = StrayPlugin()
+		paths = stray.get_all_steam_save_paths("1332010")
+		self.assertTrue(any("Nemirtingas" in p for p in paths))
+		self.assertTrue(any("SmartSteamEmu" in p for p in paths))
+		self.assertTrue(any("OnlineFix" in p for p in paths))
+
 
 if __name__ == "__main__":
 	unittest.main()

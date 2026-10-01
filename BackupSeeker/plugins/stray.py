@@ -13,7 +13,7 @@ class StrayPlugin(GamePlugin):
 	Save path references verified on PCGamingWiki.
 	"""
 
-	version: str = "2.0.0"
+	version: str = "2.1.0"
 
 	@property
 	def game_id(self) -> str:
@@ -35,9 +35,35 @@ class StrayPlugin(GamePlugin):
 				"id": "unreal_native",
 				"label": "Unreal / GOG Native Saves",
 				"kind": SAVE_KIND_DIRECTORY,
-				"paths": ["%LOCALAPPDATA%/Hk_project/Saved/SaveGames"],
+				"paths": [
+					"%LOCALAPPDATA%/Hk_project/Saved/SaveGames",
+				],
 			},
 		]
+
+		# Smart, non-bruteforce detection for moved SSD / portable installations
+		candidates = self.find_smart_install_candidates(
+			folder_names=["Stray", "stray", "Hk_project"],
+			exe_names=["Stray.exe", "Stray-Win64-Shipping.exe"],
+			steam_app_id="1332010",
+		)
+		portable_paths: list[str] = []
+		for cand in candidates:
+			p_save = cand / "Hk_project" / "Saved" / "SaveGames"
+			if p_save.exists() and p_save.is_dir():
+				portable_paths.append(str(p_save))
+			p_goldberg = cand / "steam_settings" / "saves"
+			if p_goldberg.exists() and p_goldberg.is_dir():
+				portable_paths.append(str(p_goldberg))
+
+		if portable_paths:
+			sources.append({
+				"id": "portable_ssd",
+				"label": "Portable SSD / Game Folder Saves",
+				"kind": SAVE_KIND_DIRECTORY,
+				"paths": portable_paths,
+			})
+
 		sources.extend(self.get_named_steam_emulator_sources("1332010"))
 		return sources
 

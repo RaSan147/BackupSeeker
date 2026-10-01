@@ -461,6 +461,24 @@ class GamePlugin(ABC):
 		return f"%USERPROFILE%/Documents/CPY_SAVES/Player/{app_id}"
 
 	@staticmethod
+	def get_nemirtingas_paths(app_id: str) -> list[str]:
+		"""Generate Nemirtingas SteamEmu save paths for a given Steam AppID."""
+		return [
+			f"%APPDATA%/NemirtingasSteamEmu/{app_id}",
+			f"%APPDATA%/Nemirtingas/{app_id}",
+		]
+
+	@staticmethod
+	def get_smart_steam_emu_path(app_id: str) -> str:
+		"""Generate SmartSteamEmu save path for a given Steam AppID."""
+		return f"%APPDATA%/SmartSteamEmu/{app_id}"
+
+	@staticmethod
+	def get_onlinefix_path(app_id: str) -> str:
+		"""Generate OnlineFix save path for a given Steam AppID."""
+		return f"%PUBLIC%/Documents/OnlineFix/{app_id}"
+
+	@staticmethod
 	def get_steam_install_path() -> Path | None:
 		"""Return the detected Steam install directory if available on Windows."""
 		if winreg is not None:
@@ -701,13 +719,22 @@ class GamePlugin(ABC):
 		paths: list[str] = []
 		paths.extend(cls.get_steam_userdata_paths(app_id, subfolder))
 		paths.append(cls.get_codex_path(app_id))
+		paths.append(cls.get_codex_path(app_id).replace("/remote", ""))
 		paths.append(cls.get_tenoke_path(app_id))
+		paths.append(f"{cls.get_tenoke_path(app_id)}/remote")
 		paths.append(cls.get_goldberg_path(app_id, subfolder))
+		paths.append(cls.get_goldberg_path(app_id, ""))
 		paths.append(cls.get_gse_path(app_id))
 		paths.append(cls.get_rune_path(app_id, subfolder))
+		paths.append(cls.get_rune_path(app_id, ""))
 		paths.append(cls.get_flt_path(app_id, subfolder))
+		paths.append(cls.get_flt_path(app_id, ""))
 		paths.append(cls.get_empress_path(app_id, subfolder))
+		paths.append(cls.get_empress_path(app_id, ""))
 		paths.append(cls.get_cpy_path(app_id))
+		paths.extend(cls.get_nemirtingas_paths(app_id))
+		paths.append(cls.get_smart_steam_emu_path(app_id))
+		paths.append(cls.get_onlinefix_path(app_id))
 		return paths
 
 	@classmethod
@@ -734,11 +761,12 @@ class GamePlugin(ABC):
 		})
 
 		# 2. CODEX / DODI Repack
+		codex_root = cls.get_codex_path(app_id).replace("/remote", "")
 		sources.append({
 			"id": "codex_dodi",
 			"label": "CODEX / DODI Repack",
 			"kind": SAVE_KIND_DIRECTORY,
-			"paths": [cls.get_codex_path(app_id)],
+			"paths": [cls.get_codex_path(app_id), codex_root],
 		})
 
 		# 3. TENOKE Repack
@@ -750,11 +778,13 @@ class GamePlugin(ABC):
 		})
 
 		# 4. Goldberg Steam Emulator
+		goldberg_sub = cls.get_goldberg_path(app_id, subfolder)
+		goldberg_root = cls.get_goldberg_path(app_id, "")
 		sources.append({
 			"id": "goldberg_emu",
 			"label": "Goldberg Steam Emulator",
 			"kind": SAVE_KIND_DIRECTORY,
-			"paths": [cls.get_goldberg_path(app_id, subfolder)],
+			"paths": [goldberg_sub, goldberg_root] if goldberg_sub != goldberg_root else [goldberg_root],
 		})
 
 		# 5. GSE / Hydra
@@ -766,19 +796,23 @@ class GamePlugin(ABC):
 		})
 
 		# 6. RUNE Repack
+		rune_sub = cls.get_rune_path(app_id, subfolder)
+		rune_root = cls.get_rune_path(app_id, "")
 		sources.append({
 			"id": "rune",
 			"label": "RUNE Repack",
 			"kind": SAVE_KIND_DIRECTORY,
-			"paths": [cls.get_rune_path(app_id, subfolder)],
+			"paths": [rune_sub, rune_root] if rune_sub != rune_root else [rune_root],
 		})
 
 		# 7. FairLight (FLT) Repack
+		flt_sub = cls.get_flt_path(app_id, subfolder)
+		flt_root = cls.get_flt_path(app_id, "")
 		sources.append({
 			"id": "flt",
 			"label": "FairLight (FLT) Repack",
 			"kind": SAVE_KIND_DIRECTORY,
-			"paths": [cls.get_flt_path(app_id, subfolder)],
+			"paths": [flt_sub, flt_root] if flt_sub != flt_root else [flt_root],
 		})
 
 		# 8. EMPRESS Repack
@@ -788,7 +822,9 @@ class GamePlugin(ABC):
 			"kind": SAVE_KIND_DIRECTORY,
 			"paths": [
 				cls.get_empress_path(app_id, subfolder),
+				cls.get_empress_path(app_id, ""),
 				f"%PUBLIC%/Documents/EMPRESS/{app_id}/{subfolder}".rstrip("/\\"),
+				f"%PUBLIC%/Documents/EMPRESS/{app_id}".rstrip("/\\"),
 			],
 		})
 
@@ -803,7 +839,178 @@ class GamePlugin(ABC):
 			],
 		})
 
+		# 10. Nemirtingas Steam Emu
+		sources.append({
+			"id": "nemirtingas",
+			"label": "Nemirtingas Steam Emu",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": cls.get_nemirtingas_paths(app_id),
+		})
+
+		# 11. SmartSteamEmu
+		sources.append({
+			"id": "smart_steam_emu",
+			"label": "SmartSteamEmu Saves",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_smart_steam_emu_path(app_id)],
+		})
+
+		# 12. OnlineFix
+		sources.append({
+			"id": "onlinefix",
+			"label": "OnlineFix Saves",
+			"kind": SAVE_KIND_DIRECTORY,
+			"paths": [cls.get_onlinefix_path(app_id)],
+		})
+
 		return sources
+
+	@classmethod
+	def get_muicache_install_path(cls, exe_names: list[str]) -> Path | None:
+		"""Query Windows MuiCache registry to find where an executable was launched from.
+
+		Requires zero disk walking; instantly locates games moved via external SSD.
+		"""
+		if winreg is None:
+			return None
+		exe_set = {n.lower().strip() for n in exe_names if n.strip()}
+		subkeys = [
+			r"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache",
+			r"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\AppSwitched",
+		]
+		for sub_key in subkeys:
+			try:
+				with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as k:
+					idx = 0
+					while True:
+						try:
+							val_name, _, _ = winreg.EnumValue(k, idx)
+							idx += 1
+							clean_path = val_name.split(".FriendlyAppName")[0].split(".ApplicationCompany")[0].strip('" ')
+							p = Path(clean_path)
+							if p.name.lower() in exe_set and p.exists():
+								parent = p.parent
+								if parent.name.lower() in ("win64", "binaries", "shipping", "x64"):
+									if parent.parent.name.lower() in ("binaries", "game"):
+										return parent.parent.parent
+									return parent.parent
+								return parent
+						except OSError:
+							break
+			except Exception:
+				continue
+		return None
+
+	@classmethod
+	def find_smart_install_candidates(
+		cls,
+		folder_names: list[str],
+		exe_names: list[str] | None = None,
+		steam_app_id: str | None = None,
+	) -> list[Path]:
+		"""Find game installation folders without brute-force directory walking.
+
+		Uses targeted lookups:
+		1. Steam manifest check
+		2. Windows MuiCache execution history (instant for external SSDs)
+		3. Shallow top-level check on active drives (depth 1 & 2 only)
+		"""
+		results: list[Path] = []
+		seen: set[str] = set()
+
+		def _add(p: Path | None) -> None:
+			if p and p.exists() and p.is_dir():
+				norm = str(p.resolve()).lower()
+				if norm not in seen:
+					seen.add(norm)
+					results.append(p.resolve())
+
+		if steam_app_id:
+			_add(cls.get_steam_app_install_path(steam_app_id))
+
+		if exe_names:
+			_add(cls.get_muicache_install_path(exe_names))
+
+		# Shallow check on mounted drive roots (depth 1 and 2 only)
+		drives: list[str] = ["C:/", "D:/", "E:/", "F:/", "G:/"]
+		if platform.system().lower() == "windows":
+			try:
+				import string
+				from ctypes import windll  # type: ignore[attr-defined]
+				bitmask = windll.kernel32.GetLogicalDrives()
+				detected_drives = []
+				for letter in string.ascii_uppercase:
+					if bitmask & 1:
+						detected_drives.append(f"{letter}:/")
+					bitmask >>= 1
+				if detected_drives:
+					drives = detected_drives
+			except Exception:
+				pass
+
+		for d in drives:
+			drive_path = Path(d)
+			if not drive_path.exists():
+				continue
+			for fn in folder_names:
+				_add(drive_path / fn)
+				_add(drive_path / "Games" / fn)
+				_add(drive_path / "SteamLibrary" / "steamapps" / "common" / fn)
+
+		return results
+
+	@classmethod
+	def detect_crack_signatures(cls, game_dir: Path | str) -> dict[str, Any]:
+		"""Inspect a game directory for crack / emulator signatures and return detected metadata."""
+		p = Path(game_dir)
+		if not p.exists() or not p.is_dir():
+			return {"detected": False, "crack_name": "None", "is_portable": False}
+
+		# Check Goldberg Steam Emulator
+		steam_settings = p / "steam_settings"
+		if not steam_settings.exists():
+			for sub in p.glob("**/steam_settings"):
+				if sub.is_dir():
+					steam_settings = sub
+					break
+
+		if steam_settings.exists() and steam_settings.is_dir():
+			is_local = (steam_settings / "local_save.txt").exists() or (p / "local_save.txt").exists()
+			return {
+				"detected": True,
+				"crack_name": "Goldberg Steam Emulator",
+				"is_portable": is_local,
+				"save_hint": "Local game folder" if is_local else "AppData Goldberg",
+			}
+
+		for ini_path in [p / "steam_emu.ini", *p.glob("**/steam_emu.ini")]:
+			if ini_path.is_file():
+				try:
+					content = ini_path.read_text(encoding="utf-8", errors="ignore")
+					if "TENOKE" in content:
+						crack = "TENOKE Repack"
+					elif "RUNE" in content:
+						crack = "RUNE Repack"
+					else:
+						crack = "CODEX / DODI Repack"
+					return {"detected": True, "crack_name": crack, "is_portable": False}
+				except Exception:
+					pass
+
+		for flt_path in [p / "flt.ini", *p.glob("**/flt.ini")]:
+			if flt_path.is_file():
+				return {"detected": True, "crack_name": "FairLight (FLT)", "is_portable": False}
+
+		for ali_path in [p / "ALI213.ini", *p.glob("**/ALI213.ini")]:
+			if ali_path.is_file():
+				return {"detected": True, "crack_name": "ALI213", "is_portable": True}
+
+		for threedm_path in [p / "3DMGAME.ini", *p.glob("**/3DMGAME.ini")]:
+			if threedm_path.is_file():
+				return {"detected": True, "crack_name": "3DMGAME", "is_portable": True}
+
+		return {"detected": False, "crack_name": "None", "is_portable": False}
+
 
 	@classmethod
 	def get_unity_install_path_from_log(cls, company: str, product: str) -> Path | None:
