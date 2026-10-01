@@ -38,7 +38,7 @@ from ..plugin_manager import (
 )
 from ..ui_helpers import is_app_dark
 from .helpers import _install_read_only_table
-from .styles import AdaptiveThemeStyles
+from .styles import AdaptiveThemeStyles, get_theme_styles
 
 
 class ModernPluginsInterface(QWidget):
@@ -97,7 +97,7 @@ class ModernPluginsInterface(QWidget):
         self.plugins_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.plugins_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.plugins_table.setAlternatingRowColors(True)
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         styles.apply_table_style(self.plugins_table)
         _install_read_only_table(self.plugins_table)
 
@@ -221,7 +221,7 @@ class ModernPluginsInterface(QWidget):
 
             # Dim added rows slightly while keeping them selectable
             if is_added:
-                dim_brush = AdaptiveThemeStyles().dim_brush()
+                dim_brush = get_theme_styles().dim_brush()
                 name_item.setForeground(dim_brush)
                 id_item.setForeground(dim_brush)
                 paths_item.setForeground(dim_brush)
@@ -300,7 +300,7 @@ class ModernPluginsInterface(QWidget):
                 self.plugins_table.setItem(row, 3, added_item)
                 self.plugins_table.setItem(row, 4, status_item)
                 if is_added:
-                    dim_brush = AdaptiveThemeStyles().dim_brush()
+                    dim_brush = get_theme_styles().dim_brush()
                     name_item.setForeground(dim_brush)
                     id_item.setForeground(dim_brush)
                     paths_item.setForeground(dim_brush)

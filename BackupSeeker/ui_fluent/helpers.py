@@ -13,7 +13,7 @@ from qfluentwidgets.components.widgets.scroll_bar import SmoothScrollDelegate, S
 
 from ..core import ConfigManager, GameProfile
 from ..fluent_window import resolve_plugin_for_profile
-from .styles import AdaptiveThemeStyles
+from .styles import AdaptiveThemeStyles, get_theme_styles
 
 
 def _smooth_scroll_to(sb: SmoothScrollBar, delta: int) -> None:
@@ -227,7 +227,7 @@ def _make_details_text(
 	*,
 	include_storage: bool = True,
 ) -> str:
-	styles = AdaptiveThemeStyles()
+	styles = get_theme_styles()
 	primary_color = styles.text_primary()
 	secondary_color = styles.text_secondary()
 	html_body = html.escape(detail_body)

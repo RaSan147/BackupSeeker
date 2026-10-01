@@ -41,7 +41,7 @@ from ..core import (
 from ..fluent_window import resolve_plugin_for_profile, toast_parent
 from ..ui_shared import open_path_in_explorer
 from .helpers import format_verify_report_text
-from .styles import AdaptiveThemeStyles
+from .styles import AdaptiveThemeStyles, get_theme_styles
 
 
 class VerifySaveDialog(QDialog):
@@ -61,7 +61,7 @@ class VerifySaveDialog(QDialog):
         self.plugin = plugin or resolve_plugin_for_profile(profile, parent)
         self._disp = profile.resolved_name(self.plugin)
 
-        self._theme = AdaptiveThemeStyles()
+        self._theme = get_theme_styles()
         self.setObjectName("verifySaveDialog")
         self.setWindowTitle(f"Verify Saves — {self._disp}")
         self.setStyleSheet(self._theme.verify_report_dialog_stylesheet("verifySaveDialog"))

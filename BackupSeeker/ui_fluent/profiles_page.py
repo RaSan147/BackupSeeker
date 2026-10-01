@@ -51,7 +51,7 @@ from .profile_visuals import (
 	elide_multiline_text,
 	is_emoji_icon,
 )
-from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT
+from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT, get_theme_styles
 
 
 class ModernProfilesInterface(QWidget):
@@ -127,7 +127,7 @@ class ModernProfilesInterface(QWidget):
         pheader.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.profiles_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         # Apply theme-aware stylesheet
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         styles.apply_table_style(self.profiles_table)
         _install_read_only_table(self.profiles_table)
         
@@ -219,7 +219,7 @@ class ModernProfilesInterface(QWidget):
         
     def _create_profile_card(self, profile_id: str, profile: GameProfile) -> QWidget:
         """Create a card widget for a game profile with poster image and icon overlay."""
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         card = RoundedCard()
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(8, 8, 8, 8)
@@ -444,7 +444,7 @@ class ModernProfilesInterface(QWidget):
                 parent=toast_parent(self),
             )
             return
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         dlg = QDialog(self.window() or self)
         dlg.setObjectName("verifyReportDialog")
         dlg.setStyleSheet(styles.verify_report_dialog_stylesheet("verifyReportDialog"))

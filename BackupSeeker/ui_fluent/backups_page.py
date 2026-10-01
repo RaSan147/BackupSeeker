@@ -37,6 +37,7 @@ from qfluentwidgets import (
 
 from ..core import (
 	ConfigManager,
+	cached_archive_metadata,
 	clear_before_restore,
 	read_archive_metadata,
 	run_restore,
@@ -61,7 +62,7 @@ from .helpers import (
 	apply_combo_ui_view,
 	ui_view_mode_from_combo_text,
 )
-from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT
+from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT, get_theme_styles
 
 
 class ModernBackupsInterface(QWidget):
@@ -145,7 +146,7 @@ class ModernBackupsInterface(QWidget):
         self.backups_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.backups_table.customContextMenuRequested.connect(self._show_context_menu)
         # Apply theme-aware stylesheet
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         styles.apply_table_style(self.backups_table)
         _install_read_only_table(self.backups_table)
         
@@ -252,7 +253,7 @@ class ModernBackupsInterface(QWidget):
                 r["size_display"] = f"{bsize/1024/1024:.1f} MB"
             r["date_display"] = datetime.fromtimestamp(r["timestamp"]).strftime("%Y-%m-%d %H:%M")
             po = r.get("path_obj")
-            meta = read_archive_metadata(po) if po else None
+            meta = cached_archive_metadata(po) if po else None
             summ = summarize_archive_metadata(meta, zip_path=po if po else Path("."))
             r["manifest_meta"] = summ
             r["archive_summary"] = summ.get("summary", "")
@@ -348,7 +349,7 @@ class ModernBackupsInterface(QWidget):
     
     def _create_backup_card(self, backup_row: dict) -> QWidget:
         """Create a card widget for a backup with clean typography."""
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         card = RoundedCard()
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(14, 12, 14, 12)

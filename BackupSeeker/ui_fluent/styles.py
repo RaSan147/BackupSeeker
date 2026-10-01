@@ -276,3 +276,18 @@ class AdaptiveThemeStyles:
         light_qss = self._build_dialog_table_qss(self.COLORS['light'])
         dark_qss = self._build_dialog_table_qss(self.COLORS['dark'])
         setCustomStyleSheet(table, light_qss, dark_qss)
+
+
+_styles_cache: AdaptiveThemeStyles | None = None
+_styles_dark_key: bool | None = None
+
+
+def get_theme_styles() -> AdaptiveThemeStyles:
+    """Return a cached AdaptiveThemeStyles instance, invalidating when dark/light theme flips."""
+    global _styles_cache, _styles_dark_key
+    dark = is_app_dark()
+    if _styles_cache is None or _styles_dark_key != dark:
+        _styles_cache = AdaptiveThemeStyles(dark=dark)
+        _styles_dark_key = dark
+    return _styles_cache
+

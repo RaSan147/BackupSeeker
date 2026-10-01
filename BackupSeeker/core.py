@@ -47,7 +47,11 @@ from .archive.constants import (
 	RESTORE_CLI_PATH,
 	ZIP_README_PATH,
 )
-from .archive.metadata import read_archive_metadata, summarize_archive_metadata  # noqa: F401
+from .archive.metadata import (  # noqa: F401
+	cached_archive_metadata,
+	read_archive_metadata,
+	summarize_archive_metadata,
+)
 from .archive.restore_core import is_safe_zip_member_rest
 from .registry_win import export_registry_entries
 

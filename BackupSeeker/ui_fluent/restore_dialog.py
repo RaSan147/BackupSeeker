@@ -33,6 +33,7 @@ from qfluentwidgets import (
 from ..core import (
 	ConfigManager,
 	GameProfile,
+	cached_archive_metadata,
 	clear_before_restore,
 	read_archive_metadata,
 	run_restore,
@@ -47,7 +48,7 @@ from .helpers import (
 )
 from ..fluent_window import resolve_plugin_for_profile, toast_parent
 from ..plugin_runtime import PluginHookError, run_plugin_hook
-from .styles import AdaptiveThemeStyles
+from .styles import AdaptiveThemeStyles, get_theme_styles
 
 
 class RestoreBackupDialog(QDialog):
@@ -61,7 +62,7 @@ class RestoreBackupDialog(QDialog):
         self._plug = resolve_plugin_for_profile(profile, self)
         self._disp = profile.resolved_name(self._plug)
 
-        self._theme_styles = AdaptiveThemeStyles()
+        self._theme_styles = get_theme_styles()
         self.setObjectName("restoreBackupDialog")
         self.setStyleSheet(self._theme_styles.restore_backup_dialog_stylesheet("restoreBackupDialog"))
         self.setWindowTitle(f"Restore — {self._disp}")
@@ -198,7 +199,7 @@ class RestoreBackupDialog(QDialog):
             else:
                 size_str = f"{size_bytes/1024/1024:.1f} MB"
 
-            meta = read_archive_metadata(file)
+            meta = cached_archive_metadata(file)
             summ = summarize_archive_metadata(meta, zip_path=file)
             arch_line = summ.get("summary", "")
             arch_tip = summ.get("tooltip", "")

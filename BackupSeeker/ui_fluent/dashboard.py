@@ -57,7 +57,7 @@ from .profile_visuals import (
 	fit_pixmap_to_label,
 	is_emoji_icon,
 )
-from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT
+from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT, get_theme_styles
 
 
 class ModernDashboardInterface(QWidget):
@@ -232,7 +232,7 @@ class ModernDashboardInterface(QWidget):
         self.profiles_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         # Apply theme-aware stylesheet
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         styles.apply_table_style(self.profiles_table)
         _install_read_only_table(self.profiles_table)
         # Keep table selection changes in sync with dashboard controls
@@ -753,7 +753,7 @@ class ModernDashboardInterface(QWidget):
 
     def _create_profile_card(self, profile: GameProfile) -> QWidget:
         """Create a dashboard card matching the profile-management card structure."""
-        styles = AdaptiveThemeStyles()
+        styles = get_theme_styles()
         card = RoundedCard()
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(8, 8, 8, 8)

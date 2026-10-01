@@ -215,6 +215,54 @@ class TestBundleFormat1(unittest.TestCase):
 			run_restore(prof, cfg, dest_zip, plug, clear_first=True)
 			self.assertTrue((acc1_saves / "slot1.sav").exists())
 
+	def test_cached_archive_metadata(self) -> None:
+		from BackupSeeker.archive.metadata import cached_archive_metadata, _ARCHIVE_META_CACHE
+		body = build_bundle(
+			created_at="2026-01-01T00:00:00",
+			profile_id="cached_test",
+			display_name="Cached Game",
+			plugin_id="cached_game",
+			plugin_version="1.0",
+			file_patterns=["*"],
+			manifest_keys=["save"],
+			logical_keys_map={"save": "save"},
+			roots=[],
+			plugin_snapshot={
+				"game_id": "cached_game",
+				"save_sources": [
+					{"id": "s0", "kind": "directory", "paths": ["%USERPROFILE%/Saves"]}
+				],
+			},
+			registry_export=None,
+		)
+		raw = json.dumps(body).encode("utf-8")
+		with tempfile.TemporaryDirectory() as td:
+			zp = Path(td) / "test_cache.zip"
+			with zipfile.ZipFile(zp, "w") as zf:
+				zf.writestr(BACKUP_BUNDLE_PATH, raw)
+
+			meta1 = cached_archive_metadata(zp)
+			self.assertIsNotNone(meta1)
+			assert meta1 is not None
+			self.assertEqual(meta1.profile_id, "cached_test")
+
+			# Second call returns cached instance
+			meta2 = cached_archive_metadata(zp)
+			self.assertIs(meta1, meta2)
+
+			# Modifying file updates cache
+			import time
+			time.sleep(0.02)
+			body["profile_id"] = "updated_cached_test"
+			with zipfile.ZipFile(zp, "w") as zf:
+				zf.writestr(BACKUP_BUNDLE_PATH, json.dumps(body).encode("utf-8"))
+
+			meta3 = cached_archive_metadata(zp)
+			self.assertIsNotNone(meta3)
+			assert meta3 is not None
+			self.assertEqual(meta3.profile_id, "updated_cached_test")
+			self.assertIsNot(meta1, meta3)
+
 
 if __name__ == "__main__":
 	unittest.main()

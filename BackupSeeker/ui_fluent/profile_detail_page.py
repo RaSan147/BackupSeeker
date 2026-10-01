@@ -48,6 +48,7 @@ from ..core import (
 	ConfigManager,
 	GameProfile,
 	PathUtils,
+	cached_archive_metadata,
 	clear_before_restore,
 	read_archive_metadata,
 	run_backup,
@@ -76,7 +77,7 @@ from .profile_visuals import (
 )
 from .restore_dialog import RestoreBackupDialog
 from .verify_dialog import VerifySaveDialog
-from .styles import AdaptiveThemeStyles
+from .styles import AdaptiveThemeStyles, get_theme_styles
 
 
 class ModernGameProfileInterface(SingleDirectionScrollArea):
@@ -354,7 +355,7 @@ class ModernGameProfileInterface(SingleDirectionScrollArea):
 		self.backups_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		self.backups_table.setAlternatingRowColors(True)
 		self.backups_table.setMinimumHeight(280)
-		styles = AdaptiveThemeStyles()
+		styles = get_theme_styles()
 		styles.apply_table_style(self.backups_table)
 		_install_read_only_table(self.backups_table)
 		backups_layout.addWidget(self.backups_table)
@@ -741,7 +742,7 @@ class ModernGameProfileInterface(SingleDirectionScrollArea):
 			self.backups_table.setItem(row, 2, size_item)
 
 			# Archive summary
-			meta = read_archive_metadata(r["path_obj"])
+			meta = cached_archive_metadata(r["path_obj"])
 			meta_info = summarize_archive_metadata(meta, zip_path=r["path_obj"]) if meta else {"summary": "Backup Archive"}
 			summary = meta_info.get("summary", "Backup Archive") if isinstance(meta_info, dict) else str(meta_info)
 			tooltip = meta_info.get("tooltip", summary) if isinstance(meta_info, dict) else summary

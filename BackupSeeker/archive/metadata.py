@@ -1,6 +1,7 @@
 """Unified archive metadata from ``bundle.json`` (format version 1 only)."""
 
 from __future__ import annotations
+from typing import Tuple
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,27 @@ def read_archive_metadata(zip_path: Path) -> ArchiveMetadata | None:
 	if bundle is None:
 		return None
 	return _metadata_from_bundle(bundle)
+
+
+_ARCHIVE_META_CACHE: Dict[Tuple[str, float, int], ArchiveMetadata | None] = {}
+
+
+def cached_archive_metadata(zip_path: Path) -> ArchiveMetadata | None:
+	"""Read and cache archive metadata keyed by (path, mtime, size)."""
+	try:
+		st = zip_path.stat()
+	except OSError:
+		return read_archive_metadata(zip_path)
+
+	key = (str(zip_path.resolve()), st.st_mtime, st.st_size)
+	if key in _ARCHIVE_META_CACHE:
+		return _ARCHIVE_META_CACHE[key]
+
+	meta = read_archive_metadata(zip_path)
+	if len(_ARCHIVE_META_CACHE) > 512:
+		_ARCHIVE_META_CACHE.clear()
+	_ARCHIVE_META_CACHE[key] = meta
+	return meta
 
 
 def _metadata_from_bundle(bundle: JsonDict) -> ArchiveMetadata:

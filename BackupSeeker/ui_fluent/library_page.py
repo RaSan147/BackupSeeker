@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QSize, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QPainter, QPixmap
 from PyQt6.QtWidgets import (
 	QAbstractItemView,
@@ -54,7 +54,7 @@ from .profile_visuals import (
 	fit_pixmap_to_label,
 )
 from ..ui_helpers import is_app_dark
-from .styles import LIST_STYLE_TRANSPARENT, AdaptiveThemeStyles, apply_list_transparent_style
+from .styles import LIST_STYLE_TRANSPARENT, AdaptiveThemeStyles, apply_list_transparent_style, get_theme_styles
 
 
 class GameCardWidget(RoundedCard):
@@ -335,7 +335,7 @@ class ModernLibraryInterface(QWidget):
 		t_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
 		self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		self.table_view.setAlternatingRowColors(True)
-		styles = AdaptiveThemeStyles()
+		styles = get_theme_styles()
 		styles.apply_table_style(self.table_view)
 		_install_read_only_table(self.table_view)
 		self.table_view.itemDoubleClicked.connect(self._on_table_item_double_clicked)
@@ -476,7 +476,11 @@ class ModernLibraryInterface(QWidget):
 				self.card_list.setItemWidget(item, card)
 
 	def _on_search_changed(self, text: str):
-		self._load_library()
+		if not hasattr(self, "_search_timer"):
+			self._search_timer = QTimer(self)
+			self._search_timer.setSingleShot(True)
+			self._search_timer.timeout.connect(self._load_library)
+		self._search_timer.start(120)
 
 	def _on_filter_changed(self, text: str):
 		self._load_library()

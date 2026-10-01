@@ -13,7 +13,7 @@ from .format_registry import (
 	CURRENT_ARCHIVE_FORMAT,
 	UnsupportedArchiveFormat,
 )
-from .metadata import ArchiveMetadata, read_archive_metadata, summarize_archive_metadata
+from .metadata import ArchiveMetadata, cached_archive_metadata, read_archive_metadata, summarize_archive_metadata
 from .restore_core import is_safe_zip_member_rest
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
 	"UnsupportedArchiveFormat",
 	"ZIP_README_PATH",
 	"build_bundle",
+	"cached_archive_metadata",
 	"is_safe_zip_member_rest",
 	"read_archive_metadata",
 	"read_bundle_from_zip",
