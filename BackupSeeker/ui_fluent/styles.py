@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtGui import QBrush, QColor
 from qfluentwidgets import TableWidget, setCustomStyleSheet
+from qfluentwidgets.components.widgets.list_view import ListItemDelegate
 
 from ..ui_helpers import is_app_dark
 
@@ -28,14 +29,32 @@ _LIST_TRANSPARENT_CUSTOM_QSS = (
 )
 
 
+class CardGridItemDelegate(ListItemDelegate):
+    """Item delegate for card grid views (e.g. Library & Game Store).
+
+    Card widgets (GameCardWidget, StoreCardWidget) render their own rounded
+    borders, backgrounds, and hover effects. This delegate suppresses
+    ListWidget's default item-level background painting and blue selection
+    indicator bar, preventing irregular outer glows or misaligned boxes around cards.
+    """
+
+    def _drawBackground(self, painter, option, index):
+        pass
+
+    def _drawIndicator(self, painter, option, index):
+        pass
+
+
 def apply_list_transparent_style(list_widget) -> None:
-    """Apply transparent background to a qfluentwidgets ``ListWidget`` safely.
+    """Apply transparent background and clean delegate to a qfluentwidgets ``ListWidget`` safely.
 
     Uses :func:`setCustomStyleSheet` so the Fluent-native scrollbar and
     selection QSS is preserved and only the background/border overrides are
-    appended on top.
+    appended on top. Also sets :class:`CardGridItemDelegate` to eliminate
+    irregular outer highlight glows around grid items.
     """
     setCustomStyleSheet(list_widget, _LIST_TRANSPARENT_CUSTOM_QSS, _LIST_TRANSPARENT_CUSTOM_QSS)
+    list_widget.setItemDelegate(CardGridItemDelegate(list_widget))
 
 # Dim color for inactive/installed items
 DIM_COLOR = QColor("#858b9c")

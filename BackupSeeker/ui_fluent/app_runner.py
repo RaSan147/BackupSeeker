@@ -9,11 +9,13 @@ from qfluentwidgets import FluentTranslator, Theme, setTheme
 
 from ..core import ConfigManager
 from ..developer_mode import apply_log_verbosity, is_developer_mode
+from .helpers import optimize_fluent_scrolling
 from .main_window import ModernBackupSeekerWindow
 
 
 def run_modern_fluent_app() -> int:
 	try:
+		optimize_fluent_scrolling()
 		cfg = ConfigManager()
 		apply_log_verbosity(enabled=is_developer_mode(cfg))
 

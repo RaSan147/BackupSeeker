@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QIcon, QGuiApplication
+from PyQt6.QtGui import QIcon, QGuiApplication, QPainter
 from PyQt6.QtWidgets import (QApplication, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QListWidgetItem, QTableWidgetItem, QHeaderView, QAbstractItemView,
-                             QFileDialog, QDialog, QPushButton)
+                             QFileDialog, QDialog, QPushButton, QFrame, QStyle, QStyleOption)
 
 from qframelesswindow import AcrylicWindow, TitleBar
 from qfluentwidgets import (
@@ -35,40 +35,37 @@ class RoundedCard(ElevatedCardWidget):
     """Modern card with rounded corners."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Disable hover attribute to avoid built-in hover animations
+        # Remove drop shadow animation event filter to prevent clipped/irregular outglow
+        if hasattr(self, "shadowAni") and self.shadowAni:
+            try:
+                self.removeEventFilter(self.shadowAni)
+            except Exception:
+                pass
+        if hasattr(self, "elevatedAni") and self.elevatedAni:
+            try:
+                self.elevatedAni.stop()
+            except Exception:
+                pass
+        # Enable hover tracking for clean stylesheet :hover pseudo-class handling
         try:
-            self.setAttribute(Qt.WidgetAttribute.WA_Hover, False)
+            self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         except Exception:
             pass
-        # Make card backgrounds translucent/transparent by default so
-        # the window acrylic effect can show through instead of a
-        # solid single-color background (e.g. #2d2d2d in some themes).
-        try:
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        except Exception:
-            pass
-        try:
-            # Use setCustomStyleSheet to APPEND to qfluentwidgets' native stylesheet
-            # instead of replacing it (which breaks fluent scrollbars in children).
-            transparent_qss = "RoundedCard, ElevatedCardWidget { background: transparent; }"
-            setCustomStyleSheet(self, transparent_qss, transparent_qss)
-        except Exception:
-            pass
-
     def enterEvent(self, event):
-        # Override and swallow hover/enter events to prevent movement/animation
+        # Forward to QFrame to allow stylesheet :hover state to update cleanly
+        # while bypassing ElevatedCardWidget's elevation and drop shadow animations.
         try:
-            event.accept()
+            QFrame.enterEvent(self, event)
         except Exception:
             pass
 
     def leaveEvent(self, event):
-        # Override and swallow leave events as well
+        # Forward to QFrame to clear stylesheet :hover state
         try:
-            event.accept()
+            QFrame.leaveEvent(self, event)
         except Exception:
             pass
-    
+
     def mousePressEvent(self, event):
         # Allow mouse press to propagate so parent views (e.g. QListWidget)
         # can handle selection/clicks. Do not accept here.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPainter, QPixmap
 from PyQt6.QtWidgets import (
 	QAbstractItemView,
 	QFrame,
@@ -12,6 +12,8 @@ from PyQt6.QtWidgets import (
 	QLabel,
 	QListView,
 	QListWidgetItem,
+	QStyle,
+	QStyleOption,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
@@ -47,6 +49,7 @@ from .profile_visuals import (
 	elide_multiline_text,
 	fit_pixmap_to_label,
 )
+from ..ui_helpers import is_app_dark
 from .styles import LIST_STYLE_TRANSPARENT, AdaptiveThemeStyles, apply_list_transparent_style
 
 
@@ -76,7 +79,7 @@ class StoreCardWidget(RoundedCard):
 		self.setFixedSize(260, 275)
 		self.setCursor(Qt.CursorShape.PointingHandCursor)
 
-		is_dark = (self.config.theme or "dark").lower() != "light"
+		is_dark = is_app_dark()
 		bg_card = "#1a1c26" if is_dark else "#ffffff"
 		bg_card_hover = "#222534" if is_dark else "#f0f2f8"
 		border_color = "#2b2e42" if is_dark else "#e0e3ed"
@@ -124,7 +127,17 @@ class StoreCardWidget(RoundedCard):
 		self.title_label.setFixedHeight(40)
 		self.title_label.setText(elide_multiline_text(name, self.title_label.font(), 230, max_lines=2))
 		self.title_label.setToolTip(name)
-		self.title_label.setStyleSheet("StrongBodyLabel { font-size: 14px; font-weight: bold; background: transparent; border: none; padding: 0px; }")
+		title_color = "#ffffff" if is_dark else "#16171d"
+		self.title_label.setStyleSheet(
+			f"StrongBodyLabel {{"
+			f"  color: {title_color};"
+			f"  font-size: 14px;"
+			f"  font-weight: bold;"
+			f"  background: transparent;"
+			f"  border: none;"
+			f"  padding: 0px;"
+			f"}}"
+		)
 		layout.addWidget(self.title_label)
 
 		# Status Badges Row
@@ -133,44 +146,53 @@ class StoreCardWidget(RoundedCard):
 
 		if self.is_detected:
 			det_badge = CaptionLabel("Installed", self)
+			det_bg = "#143322" if is_dark else "#dcfce7"
+			det_color = "#4ade80" if is_dark else "#15803d"
+			det_border = "#1e5938" if is_dark else "#bbf7d0"
 			det_badge.setStyleSheet(
-				"CaptionLabel {"
-				"  background-color: #143322;"
-				"  color: #4ade80;"
-				"  border: 1px solid #1e5938;"
-				"  border-radius: 9999px;"
-				"  padding: 2px 10px;"
-				"  font-weight: bold;"
-				"  font-size: 11px;"
-				"}"
+				f"CaptionLabel {{"
+				f"  background-color: {det_bg};"
+				f"  color: {det_color};"
+				f"  border: 1px solid {det_border};"
+				f"  border-radius: 9999px;"
+				f"  padding: 2px 10px;"
+				f"  font-weight: bold;"
+				f"  font-size: 11px;"
+				f"}}"
 			)
 			status_row.addWidget(det_badge)
 		else:
 			sup_badge = CaptionLabel("Supported", self)
+			sup_bg = "#26293b" if is_dark else "#eef0f8"
+			sup_color = "#a0a6b8" if is_dark else "#4f5466"
+			sup_border = "#363a52" if is_dark else "#d8dce8"
 			sup_badge.setStyleSheet(
-				"CaptionLabel {"
-				"  background-color: #26293b;"
-				"  color: #a0a6b8;"
-				"  border: 1px solid #363a52;"
-				"  border-radius: 9999px;"
-				"  padding: 2px 10px;"
-				"  font-size: 11px;"
-				"}"
+				f"CaptionLabel {{"
+				f"  background-color: {sup_bg};"
+				f"  color: {sup_color};"
+				f"  border: 1px solid {sup_border};"
+				f"  border-radius: 9999px;"
+				f"  padding: 2px 10px;"
+				f"  font-size: 11px;"
+				f"}}"
 			)
 			status_row.addWidget(sup_badge)
 
 		if self.in_library:
 			lib_badge = CaptionLabel("In Library", self)
+			lib_bg = "#1e2442" if is_dark else "#e0e7ff"
+			lib_color = "#5b6cf9" if is_dark else "#4338ca"
+			lib_border = "#2f3a6e" if is_dark else "#c7d2fe"
 			lib_badge.setStyleSheet(
-				"CaptionLabel {"
-				"  background-color: #1e2442;"
-				"  color: #5b6cf9;"
-				"  border: 1px solid #2f3a6e;"
-				"  border-radius: 9999px;"
-				"  padding: 2px 10px;"
-				"  font-weight: bold;"
-				"  font-size: 11px;"
-				"}"
+				f"CaptionLabel {{"
+				f"  background-color: {lib_bg};"
+				f"  color: {lib_color};"
+				f"  border: 1px solid {lib_border};"
+				f"  border-radius: 9999px;"
+				f"  padding: 2px 10px;"
+				f"  font-weight: bold;"
+				f"  font-size: 11px;"
+				f"}}"
 			)
 			status_row.addWidget(lib_badge)
 
@@ -201,6 +223,12 @@ class StoreCardWidget(RoundedCard):
 
 		self._load_poster()
 
+	def paintEvent(self, event):
+		opt = QStyleOption()
+		opt.initFrom(self)
+		p = QPainter(self)
+		self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
+
 	def _load_poster(self):
 		saved = getattr(self.plugin, "_saved_poster", "")
 		if saved and Path(saved).is_file():
@@ -216,7 +244,9 @@ class StoreCardWidget(RoundedCard):
 
 		self.poster_label.clear()
 		self.poster_label.setText("GAME")
-		self.poster_label.setStyleSheet("QLabel { color: #5b6cf9; font-weight: bold; font-size: 16px; }")
+		is_dark = is_app_dark()
+		fallback_color = "#5b6cf9" if is_dark else "#4338ca"
+		self.poster_label.setStyleSheet(f"QLabel {{ color: {fallback_color}; font-weight: bold; font-size: 16px; }}")
 
 	def _on_assets_ready(self):
 		saved = getattr(self.plugin, "_saved_poster", "")
@@ -337,10 +367,11 @@ class ModernGameStoreInterface(QWidget):
 		self.card_list.setGridSize(self._CARD_GRID_SIZE)
 		self.card_list.setSpacing(12)
 		apply_list_transparent_style(self.card_list)
+		self.card_list.verticalScrollBar().setSingleStep(60)
 		self.card_list.setDragEnabled(False)
 		self.card_list.setDragDropMode(QAbstractItemView.DragDropMode.NoDragDrop)
 		self.card_list.setMovement(QListView.Movement.Static)
-		self.card_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+		self.card_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 		self.card_list.setFlow(QListView.Flow.LeftToRight)
 		self.card_list.setWrapping(True)
 		self.card_list.setResizeMode(QListView.ResizeMode.Adjust)
