@@ -32,10 +32,9 @@ BackupSeeker creates timestamped ZIP archives of game save folders and provides 
 
 **Architecture (key files)**
 - `BackupSeeker/core.py` - core logic, `GameProfile`, backup/restore orchestration.
-- `BackupSeeker/main.py` - entry: Fluent UI when imports succeed, else legacy `BackupSeeker.ui.run_app`.
+- `BackupSeeker/main.py` - entry → Fluent UI (`run_modern_fluent_app`).
 - `BackupSeeker/ui_fluent/` - Fluent UI (PyQt6-Fluent-Widgets): `app_runner.py` (`run_modern_fluent_app`), `main_window.py`, dashboard/plugins/profiles/backups pages, `fluent_impl.py` re-exports.
 - `BackupSeeker/modern_widgets.py` - shared Fluent cards, navigation helpers, dialogs.
-- `BackupSeeker/ui.py` - legacy PyQt6 UI (`run_app`) used as fallback.
 - `BackupSeeker/plugin_manager.py` - plugin discovery and asset download (icons/posters).
 - `BackupSeeker/plugins/base.py` - `GamePlugin` API; `plugins/save_sources.py` - `save_sources` schema.
 - `BackupSeeker/plugins/` - built-in plugins, `games.jsonc`, templates.
@@ -74,7 +73,7 @@ On Windows there is a convenience script: `install_me.bat` (runs `pip install -r
 From the repository root:
 
 ```pwsh
-# Preferred package entry (Fluent UI; falls back to legacy UI on failure)
+# Preferred package entry (Fluent UI)
 python -m BackupSeeker.main
 
 # Or the top-level launcher (delegates to BackupSeeker.main)

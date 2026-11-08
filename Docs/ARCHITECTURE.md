@@ -10,7 +10,6 @@ flowchart TB
     MainEntry["BackupSeeker.main"]
     FluentPkg["BackupSeeker.ui_fluent"]
     ModernWidgets["BackupSeeker.modern_widgets"]
-    LegacyUI["BackupSeeker.ui"]
   end
   subgraph application [Application services]
     PM["PluginManager"]
@@ -21,33 +20,29 @@ flowchart TB
     Archive["BackupSeeker.archive"]
     PluginRT["plugin_runtime helpers"]
   end
-  MainEntry -->|"try"| FluentPkg
-  MainEntry -->|"except"| LegacyUI
+  MainEntry --> FluentPkg
   FluentPkg --> ModernWidgets
   FluentPkg --> PM
-  LegacyUI --> PM
   FluentPkg --> CoreMod
-  LegacyUI --> CoreMod
   PM --> CoreMod
   Config --> CoreMod
   CoreMod --> Archive
   CoreMod --> PluginRT
 ```
 
-- **Presentation:** [`BackupSeeker/main.py`](../BackupSeeker/main.py) imports `run_modern_fluent_app` from [`BackupSeeker/ui_fluent`](../BackupSeeker/ui_fluent/__init__.py) (implemented in [`app_runner.py`](../BackupSeeker/ui_fluent/app_runner.py), main window in [`main_window.py`](../BackupSeeker/ui_fluent/main_window.py), feature pages in `dashboard.py`, `profiles_page.py`, `plugins_page.py`, `backups_page.py`, etc.). Shared Fluent building blocks live in [`BackupSeeker/modern_widgets.py`](../BackupSeeker/modern_widgets.py). On any import or init failure, the core prints a traceback and falls back to [`BackupSeeker/ui.py`](../BackupSeeker/ui.py) (`run_app` / legacy `MainWindow`).
+- **Presentation:** [`BackupSeeker/main.py`](../BackupSeeker/main.py) imports `run_modern_fluent_app` from [`BackupSeeker/ui_fluent`](../BackupSeeker/ui_fluent/__init__.py) (implemented in [`app_runner.py`](../BackupSeeker/ui_fluent/app_runner.py), main window in [`main_window.py`](../BackupSeeker/ui_fluent/main_window.py), feature pages in `dashboard.py`, `profiles_page.py`, `plugins_page.py`, `backups_page.py`, etc.). Shared Fluent building blocks live in [`BackupSeeker/modern_widgets.py`](../BackupSeeker/modern_widgets.py).
 - **Application services:** [`BackupSeeker/plugin_manager.py`](../BackupSeeker/plugin_manager.py) discovers code plugins (`pkgutil` over `plugins/`) and JSONC plugins (`games.jsonc`), respects optional [`plugins/plugin_index.json`](../BackupSeeker/plugins/plugin_index.json), downloads/caches plugin icons and posters under `BackupSeeker/data/`, and registers [`GamePlugin`](../BackupSeeker/plugins/base.py) instances. Configuration is loaded/saved via core’s config types (path `BackupSeeker/gsm_config.json`).
 - **Core:** [`BackupSeeker/core.py`](../BackupSeeker/core.py) holds `GameProfile`, path contraction/expansion, `run_backup`, restore flows, and orchestration with [`BackupSeeker/archive/`](../BackupSeeker/archive/) (bundle format, ZIP packaging, restore safety checks).
 - **Fluent helpers:** [`BackupSeeker/fluent_window.py`](../BackupSeeker/fluent_window.py) defines protocols and helpers (for example toast parent resolution) so widgets avoid circular imports with the Fluent package.
 
 ## Startup sequence
 
-1. `python -m BackupSeeker.main` runs the package entry (or `python -m BackupSeeker.ui_fluent` for the Fluent runner only).
+1. `python -m BackupSeeker.main` runs the package entry (or `python -m BackupSeeker.ui_fluent`).
 2. Import `run_modern_fluent_app` from `BackupSeeker.ui_fluent` → [`app_runner.run_modern_fluent_app`](../BackupSeeker/ui_fluent/app_runner.py): `QApplication`, Fluent theme from config, then [`ModernBackupSeekerWindow`](../BackupSeeker/ui_fluent/main_window.py).
-3. If Fluent import or init fails, print traceback and use `BackupSeeker.ui.run_app` instead.
 
 ## Backup pipeline (conceptual)
 
-Both UIs follow the same pattern:
+The Fluent UI follows this pattern:
 
 1. Resolve `GamePlugin` for the current profile (`plugin_id`).
 2. `profile.as_operation_dict(plugin)` → optional `plugin.preprocess_backup(profile_dict)`; UI may push changed `save_path` back onto the profile.

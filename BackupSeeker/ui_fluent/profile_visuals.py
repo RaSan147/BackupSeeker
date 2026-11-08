@@ -54,15 +54,13 @@ def load_pixmap(image_path: str | None) -> QPixmap | None:
 		return None
 
 
-def fit_pixmap_to_label(label: QLabel, pix: QPixmap, max_size: QSize) -> None:
+def scale_poster(pix: QPixmap, max_size: QSize) -> QPixmap:
 	"""Shrink-to-fit on a transparent canvas; never upscale."""
 
-	label.setStyleSheet("QLabel{background: transparent; border:0;}")
-	label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-
 	if pix is None or pix.isNull():
-		label.clear()
-		return
+		blank = QPixmap(max_size)
+		blank.fill(Qt.GlobalColor.transparent)
+		return blank
 
 	target_w = max_size.width()
 	target_h = max_size.height()
@@ -82,10 +80,30 @@ def fit_pixmap_to_label(label: QLabel, pix: QPixmap, max_size: QSize) -> None:
 	painter = QPainter(canvas)
 	painter.drawPixmap(x, y, scaled)
 	painter.end()
+	return canvas
+
+
+def fit_pixmap_to_label(label: QLabel, pix: QPixmap, max_size: QSize) -> None:
+	"""Shrink-to-fit on a transparent canvas; never upscale."""
+
+	label.setStyleSheet("QLabel{background: transparent; border:0;}")
+	label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+	if pix is None or pix.isNull():
+		label.clear()
+		return
 
 	label.setScaledContents(False)
 	label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-	label.setPixmap(canvas)
+	label.setPixmap(scale_poster(pix, max_size))
+
+
+def unload_poster_label(label: QLabel) -> None:
+	"""Drop pixmap/text so an off-screen card releases bitmap memory."""
+
+	label.clear()
+	label.setPixmap(QPixmap())
+	label.setText("")
 
 
 def is_emoji_icon(icon_str: str) -> bool:

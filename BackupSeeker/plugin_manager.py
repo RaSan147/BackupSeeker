@@ -6,7 +6,6 @@ import json
 import logging
 import pkgutil
 import shutil
-import sys
 import threading
 import time
 import traceback
@@ -50,7 +49,7 @@ class PluginLoadReport:
 	issues: list[PluginLoadIssue] = field(default_factory=list)
 	loaded_count: int = 0
 	code_module_count: int = 0
-	purged_modules: list[str] = field(default_factory=list)
+	reloaded_modules: list[str] = field(default_factory=list)
 	duration_ms: float = 0.0
 	hot: bool = False
 
@@ -101,16 +100,16 @@ def format_load_report_verbose(report: PluginLoadReport) -> str:
 		format_load_report_summary(report),
 		f"Reload: {'hot' if report.hot else 'cold'} | "
 		f"modules scanned: {report.code_module_count} | "
-		f"purged from sys.modules: {len(report.purged_modules)} | "
+		f"importlib.reload: {len(report.reloaded_modules)} | "
 		f"{report.duration_ms:.0f} ms",
 	]
-	if report.purged_modules:
+	if report.reloaded_modules:
 		lines.append("")
-		lines.append("Purged modules:")
-		for name in report.purged_modules[:40]:
+		lines.append("Reloaded modules:")
+		for name in report.reloaded_modules[:40]:
 			lines.append(f" - {name}")
-		if len(report.purged_modules) > 40:
-			lines.append(f"  … and {len(report.purged_modules) - 40} more")
+		if len(report.reloaded_modules) > 40:
+			lines.append(f"  … and {len(report.reloaded_modules) - 40} more")
 	if report.issues:
 		lines.append("")
 		lines.append("Issues:")
@@ -208,25 +207,19 @@ class PluginManager:
 	def reload_plugins(self, *, hot: bool = True) -> PluginLoadReport:
 		"""Discover plugins from ``plugins/`` and ``games.jsonc``.
 
-		When *hot* is True, purge cached ``*.plugins.*`` modules from ``sys.modules``
-		so edited ``.py`` files are re-imported on the next pass.
+		When *hot* is True, each game plugin module is refreshed with
+		``importlib.reload`` so file edits apply. Support modules (``base``, etc.)
+		are never reloaded, so ``GamePlugin`` identity stays stable for ``issubclass``.
 		"""
 
 		start = time.perf_counter()
 		issues: list[PluginLoadIssue] = []
-		purged: list[str] = []
 		prev_ids = set(self.available_plugins.keys())
-
-		if hot:
-			purged = self._purge_plugin_package_modules()
-
-		# Always rebind after a possible purge (and on cold start for consistency).
-		self._rebind_base_exports()
 
 		self.available_plugins.clear()
 		self._asset_loading.clear()
 		self._asset_callbacks.clear()
-		code_modules, code_issues = self._load_code_plugins()
+		code_modules, code_issues, reloaded = self._load_code_plugins(hot=hot)
 		issues.extend(code_issues)
 		json_issues = self._load_json_plugins()
 		issues.extend(json_issues)
@@ -246,7 +239,7 @@ class PluginManager:
 			issues=issues,
 			loaded_count=len(self.available_plugins),
 			code_module_count=code_modules,
-			purged_modules=purged,
+			reloaded_modules=reloaded,
 			duration_ms=(time.perf_counter() - start) * 1000.0,
 			hot=hot,
 		)
@@ -262,39 +255,6 @@ class PluginManager:
 				logger.exception("PluginManager.on_reload callback failed")
 		return report
 
-	def _plugins_package_prefix(self) -> str:
-		pkg_name = __package__.rsplit(".", 1)[0]
-		return f"{pkg_name}.plugins."
-
-	def _purge_plugin_package_modules(self) -> list[str]:
-		"""Drop cached plugin package modules so hot reload picks up file edits."""
-
-		prefix = self._plugins_package_prefix()
-		pkg_root = prefix.rstrip(".")
-		purged: list[str] = []
-		for name in list(sys.modules.keys()):
-			if name == pkg_root or name.startswith(prefix):
-				del sys.modules[name]
-				purged.append(name)
-		return sorted(purged)
-
-	def _rebind_base_exports(self) -> type[GamePlugin]:
-		"""Re-import ``GamePlugin`` after a purge so ``issubclass`` checks stay valid.
-
-		Hot reload deletes ``BackupSeeker.plugins.base`` from ``sys.modules``. Plugin
-		modules then subclass a *new* ``GamePlugin``, while this module would still
-		hold the old class object — every ``EXPORT`` class fails ``issubclass`` and
-		only JSON plugins (built against whatever ``plugin_from_json`` still
-		references) would remain visible.
-		"""
-
-		global GamePlugin, plugin_from_json
-		from .plugins import base as base_mod
-
-		GamePlugin = base_mod.GamePlugin
-		plugin_from_json = base_mod.plugin_from_json
-		return GamePlugin
-
 	def get_plugin_for_profile(self, plugin_id: str | None):
 		if not plugin_id:
 			return None
@@ -302,7 +262,7 @@ class PluginManager:
 
 	def _register_plugin(
 		self,
-		plugin: object,
+		plugin: GamePlugin,
 		source: str,
 		issues: list[PluginLoadIssue],
 	) -> None:
@@ -354,8 +314,9 @@ class PluginManager:
 		disabled = {str(x).strip() for x in disabled_raw} if isinstance(disabled_raw, list) else set()
 		return allowed, disabled
 
-	def _load_code_plugins(self) -> tuple[int, list[PluginLoadIssue]]:
+	def _load_code_plugins(self, *, hot: bool = False) -> tuple[int, list[PluginLoadIssue], list[str]]:
 		issues: list[PluginLoadIssue] = []
+		reloaded: list[str] = []
 		module_count = 0
 		if not self.plugins_dir.exists():
 			issues.append(
@@ -366,10 +327,10 @@ class PluginManager:
 					"",
 				)
 			)
-			return module_count, issues
+			return module_count, issues, reloaded
 
 		allowed, disabled = self._plugin_index_filter()
-		
+
 		for _finder, name, _ispkg in pkgutil.iter_modules([str(self.plugins_dir)]):
 			if name.startswith("__"):
 				continue
@@ -393,6 +354,9 @@ class PluginManager:
 			try:
 				full_name = f".plugins.{name}"
 				module = importlib.import_module(full_name, package=__package__)
+				if hot:
+					module = importlib.reload(module)
+					reloaded.append(module.__name__)
 
 				plugins = getattr(module, "EXPORT", None)
 				if plugins is None:
@@ -438,7 +402,7 @@ class PluginManager:
 			except Exception as exc:
 				logger.exception("Failed importing plugin module %s", name)
 				issues.append(_issue_from_exception(source, exc, context="import module"))
-		return module_count, issues
+		return module_count, issues, reloaded
 
 	def _instantiate_export_entry(
 		self,

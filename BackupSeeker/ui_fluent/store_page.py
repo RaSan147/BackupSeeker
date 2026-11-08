@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QPainter, QPixmap
+from PyQt6.QtGui import QPainter
 from PyQt6.QtWidgets import (
 	QAbstractItemView,
 	QFrame,
@@ -41,6 +41,7 @@ from ..developer_mode import is_developer_mode
 from ..fluent_window import toast_parent
 from ..modern_widgets import RoundedCard
 from ..plugin_manager import PluginManager
+from .card_viewport import apply_cached_poster, page_bounds
 from .helpers import (
 	_install_read_only_table,
 )
@@ -49,18 +50,19 @@ from .profile_visuals import (
 	POSTER_LABEL_NAME,
 	ProfilePosterService,
 	elide_multiline_text,
-	fit_pixmap_to_label,
 )
 from ..ui_helpers import is_app_dark
-from .styles import LIST_STYLE_TRANSPARENT, AdaptiveThemeStyles, apply_list_transparent_style, get_theme_styles
+from .styles import apply_list_transparent_style, get_theme_styles
 
 
 class StoreCardWidget(RoundedCard):
-	"""Modern store card showing plugin artwork, detection badge, and 1-click Add."""
+	"""Store card with poster, detection badge, and Add/Remove."""
 
 	clicked = pyqtSignal()
 	profile_requested = pyqtSignal()
 	toggle_library_requested = pyqtSignal()
+
+	_CARD_POSTER_SIZE = QSize(240, 135)
 
 	def __init__(
 		self,
@@ -77,6 +79,7 @@ class StoreCardWidget(RoundedCard):
 		self._posters = poster_service
 		self.is_detected = is_detected
 		self.in_library = in_library
+		self._load_token = 0
 
 		self.setFixedSize(260, 275)
 		self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -103,7 +106,6 @@ class StoreCardWidget(RoundedCard):
 		layout.setContentsMargins(10, 10, 10, 10)
 		layout.setSpacing(8)
 
-		# Poster Area
 		self.poster_frame = QFrame(self)
 		self.poster_frame.setFixedSize(240, 135)
 		frame_bg = "#12131a" if is_dark else "#eaedf5"
@@ -122,7 +124,6 @@ class StoreCardWidget(RoundedCard):
 		p_layout.addWidget(self.poster_label)
 		layout.addWidget(self.poster_frame)
 
-		# Title (Multi-line elision + tooltip)
 		name = getattr(self.plugin, "game_name", "") or getattr(self.plugin, "game_id", "Game")
 		self.title_label = StrongBodyLabel(self)
 		self.title_label.setWordWrap(True)
@@ -142,7 +143,6 @@ class StoreCardWidget(RoundedCard):
 		)
 		layout.addWidget(self.title_label)
 
-		# Status Badges Row
 		status_row = QHBoxLayout()
 		status_row.setSpacing(6)
 
@@ -201,17 +201,14 @@ class StoreCardWidget(RoundedCard):
 		status_row.addStretch()
 		layout.addLayout(status_row)
 
-		# Action Button Row (Add/Remove & Profile buttons)
 		btn_row = QHBoxLayout()
 		btn_row.setSpacing(8)
 
 		if self.in_library:
 			self.add_btn = PushButton(FIF.DELETE, "Remove", self)
-			self.add_btn.setFixedHeight(30)
 		else:
 			self.add_btn = PrimaryPushButton(FIF.ADD, "Add", self)
-			self.add_btn.setFixedHeight(30)
-
+		self.add_btn.setFixedHeight(30)
 		self.add_btn.clicked.connect(self.toggle_library_requested.emit)
 		btn_row.addWidget(self.add_btn)
 
@@ -231,31 +228,35 @@ class StoreCardWidget(RoundedCard):
 		p = QPainter(self)
 		self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
 
-	def _load_poster(self):
-		saved = getattr(self.plugin, "_saved_poster", "")
-		if saved and Path(saved).is_file():
-			pix = QPixmap(saved)
-			if not pix.isNull():
-				fit_pixmap_to_label(self.poster_label, pix, QSize(240, 135))
-				return
-
-		# Trigger poster preload if needed
-		pm = self._posters.plugin_manager()
-		if pm is not None:
-			pm.ensure_plugin_visual_assets(self.plugin, self._on_assets_ready)
-
+	def _show_poster_placeholder(self) -> None:
 		self.poster_label.clear()
 		self.poster_label.setText("GAME")
 		is_dark = is_app_dark()
 		fallback_color = "#5b6cf9" if is_dark else "#4338ca"
-		self.poster_label.setStyleSheet(f"QLabel {{ color: {fallback_color}; font-weight: bold; font-size: 16px; }}")
+		self.poster_label.setStyleSheet(
+			f"QLabel {{ color: {fallback_color}; font-weight: bold; font-size: 16px; }}"
+		)
 
-	def _on_assets_ready(self):
+	def _load_poster(self):
+		self._load_token += 1
+		token = self._load_token
 		saved = getattr(self.plugin, "_saved_poster", "")
 		if saved and Path(saved).is_file():
-			pix = QPixmap(saved)
-			if not pix.isNull():
-				fit_pixmap_to_label(self.poster_label, pix, QSize(240, 135))
+			if apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE):
+				return
+
+		pm = self._posters.plugin_manager()
+		if pm is not None:
+			pm.ensure_plugin_visual_assets(self.plugin, lambda t=token: self._on_assets_ready(t))
+
+		self._show_poster_placeholder()
+
+	def _on_assets_ready(self, token: int):
+		if token != self._load_token:
+			return
+		saved = getattr(self.plugin, "_saved_poster", "")
+		if saved and Path(saved).is_file():
+			apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE)
 
 	def mousePressEvent(self, event):
 		if event.button() == Qt.MouseButton.LeftButton:
@@ -273,6 +274,8 @@ class ModernGameStoreInterface(QWidget):
 	profiles_changed = pyqtSignal()
 
 	_CARD_GRID_SIZE = QSize(275, 290)
+	# LCM(3, 4, 5) so pages fill evenly at common grid column counts.
+	_PAGE_SIZE = 60
 
 	def __init__(
 		self,
@@ -290,6 +293,8 @@ class ModernGameStoreInterface(QWidget):
 		)
 		self._detected_game_ids: set[str] = set()
 		self._plugin_cache: dict[str, GamePlugin] | None = None
+		self._filtered: list[tuple[object, bool, bool]] = []
+		self._page = 0
 
 		self._setup_ui()
 		self._scan_detected_games_initial()
@@ -306,30 +311,31 @@ class ModernGameStoreInterface(QWidget):
 		layout.setContentsMargins(24, 20, 24, 24)
 		layout.setSpacing(18)
 
-		# Top Header Row
 		header = QHBoxLayout()
 		header.setSpacing(12)
 
 		title_v = QVBoxLayout()
 		title_v.setSpacing(2)
 		self.title_label = StrongBodyLabel("Game Store")
-		self.title_label.setStyleSheet("StrongBodyLabel { font-size: 24px; font-weight: bold; background: transparent; border: none; }")
+		self.title_label.setStyleSheet(
+			"StrongBodyLabel { font-size: 24px; font-weight: bold; background: transparent; border: none; }"
+		)
 		self.count_label = CaptionLabel("0 Supported Games")
-		self.count_label.setStyleSheet("CaptionLabel { color: #858b9c; font-size: 13px; background: transparent; border: none; }")
+		self.count_label.setStyleSheet(
+			"CaptionLabel { color: #858b9c; font-size: 13px; background: transparent; border: none; }"
+		)
 		title_v.addWidget(self.title_label)
 		title_v.addWidget(self.count_label)
 		header.addLayout(title_v)
 
 		header.addStretch()
 
-		# Search Box
 		self.search_edit = LineEdit()
 		self.search_edit.setPlaceholderText("Search supported games...")
 		self.search_edit.setFixedWidth(240)
 		self.search_edit.textChanged.connect(self._on_search_changed)
 		header.addWidget(self.search_edit)
 
-		# Filter Combo
 		self.filter_combo = ComboBox()
 		self.filter_combo.addItem("All Games")
 		self.filter_combo.addItem("Installed on System")
@@ -339,7 +345,6 @@ class ModernGameStoreInterface(QWidget):
 		self.filter_combo.currentTextChanged.connect(self._on_filter_changed)
 		header.addWidget(self.filter_combo)
 
-		# View Mode Toggle (Cards / List)
 		self.view_toggle = ComboBox()
 		self.view_toggle.addItem("Cards")
 		self.view_toggle.addItem("List")
@@ -347,13 +352,11 @@ class ModernGameStoreInterface(QWidget):
 		self.view_toggle.currentTextChanged.connect(self._on_view_mode_changed)
 		header.addWidget(self.view_toggle)
 
-		# Detect Installed Button
 		self.detect_btn = PrimaryPushButton(FIF.SEARCH, "Detect Installed Games")
 		self.detect_btn.setFixedHeight(34)
 		self.detect_btn.clicked.connect(self._detect_games)
 		header.addWidget(self.detect_btn)
 
-		# Reload Plugins Button (Dev mode)
 		self.reload_btn = PushButton(FIF.SYNC, "Reload Plugins")
 		self.reload_btn.setFixedHeight(34)
 		self.reload_btn.clicked.connect(self._reload_plugins)
@@ -362,13 +365,11 @@ class ModernGameStoreInterface(QWidget):
 
 		layout.addLayout(header)
 
-		# Content Container
 		self.content_container = QWidget()
 		self.content_layout = QVBoxLayout(self.content_container)
 		self.content_layout.setContentsMargins(0, 0, 0, 0)
 		self.content_layout.setSpacing(12)
 
-		# 1. Cards Grid View
 		self.card_list = ListWidget()
 		self.card_list.setViewMode(QListView.ViewMode.IconMode)
 		self.card_list.setGridSize(self._CARD_GRID_SIZE)
@@ -385,7 +386,6 @@ class ModernGameStoreInterface(QWidget):
 		self.card_list.setUniformItemSizes(True)
 		self.content_layout.addWidget(self.card_list)
 
-		# 2. Table List View
 		self.table_view = TableWidget()
 		self.table_view.setColumnCount(5)
 		self.table_view.setHorizontalHeaderLabels(
@@ -405,6 +405,25 @@ class ModernGameStoreInterface(QWidget):
 		self.table_view.itemDoubleClicked.connect(self._on_table_item_double_clicked)
 		self.content_layout.addWidget(self.table_view)
 
+		pager = QHBoxLayout()
+		pager.setSpacing(8)
+		pager.addStretch()
+		self.prev_page_btn = PushButton(FIF.CARE_LEFT_SOLID, "Previous")
+		self.prev_page_btn.setFixedHeight(30)
+		self.prev_page_btn.clicked.connect(self._prev_page)
+		pager.addWidget(self.prev_page_btn)
+		self.page_label = CaptionLabel("Page 1 of 1")
+		self.page_label.setStyleSheet(
+			"CaptionLabel { color: #858b9c; font-size: 12px; background: transparent; border: none; }"
+		)
+		pager.addWidget(self.page_label)
+		self.next_page_btn = PushButton(FIF.CARE_RIGHT_SOLID, "Next")
+		self.next_page_btn.setFixedHeight(30)
+		self.next_page_btn.clicked.connect(self._next_page)
+		pager.addWidget(self.next_page_btn)
+		pager.addStretch()
+		self.content_layout.addLayout(pager)
+
 		layout.addWidget(self.content_container)
 
 	def _scan_detected_games_initial(self):
@@ -423,6 +442,7 @@ class ModernGameStoreInterface(QWidget):
 
 		invalidate_detection_caches()
 		found = []
+		self._detected_game_ids = set()
 		for p in self.plugin_manager.plugins.values():
 			try:
 				if hasattr(p, "is_detected") and p.is_detected():
@@ -449,27 +469,17 @@ class ModernGameStoreInterface(QWidget):
 				position=InfoBarPosition.TOP,
 			)
 
-	def _load_store(self):
-		"""Populate store items."""
-		self.card_list.clear()
-		self.table_view.setRowCount(0)
-
+	def _collect_filtered(self) -> list[tuple[object, bool, bool]]:
 		query = self.search_edit.text().strip().lower()
 		filter_type = self.filter_combo.currentText()
-		view_mode = self.view_toggle.currentText().lower()
-
-		plugins = list(self.plugin_manager.plugins.values())
-		self.count_label.setText(f"{len(plugins)} Supported Game(s)")
-
-		# Existing library game IDs
 		library_plugin_ids = {
 			prof.plugin_id
 			for prof in self.config.games.values()
 			if prof.plugin_id
 		}
 
-		filtered = []
-		for plug in plugins:
+		filtered: list[tuple[object, bool, bool]] = []
+		for plug in self.plugin_manager.plugins.values():
 			gid = getattr(plug, "game_id", "")
 			name = getattr(plug, "game_name", "") or gid
 			is_det = gid in self._detected_game_ids
@@ -477,22 +487,49 @@ class ModernGameStoreInterface(QWidget):
 
 			if query and query not in name.lower() and query not in gid.lower():
 				continue
-
 			if filter_type == "Installed on System" and not is_det:
 				continue
 			if filter_type == "In Library" and not in_lib:
 				continue
 			if filter_type == "Available to Add" and in_lib:
 				continue
-
 			filtered.append((plug, is_det, in_lib))
+		return filtered
+
+	def _update_pager(self, total: int) -> None:
+		page, _, _ = page_bounds(total, self._page, self._PAGE_SIZE)
+		self._page = page
+		pages = max(1, (total + self._PAGE_SIZE - 1) // self._PAGE_SIZE) if total else 1
+		self.page_label.setText(f"Page {page + 1} of {pages}")
+		self.prev_page_btn.setEnabled(page > 0)
+		self.next_page_btn.setEnabled(page + 1 < pages)
+		show_pager = total > self._PAGE_SIZE
+		self.prev_page_btn.setVisible(show_pager)
+		self.next_page_btn.setVisible(show_pager)
+		self.page_label.setVisible(show_pager)
+
+	def _load_store(self):
+		"""Populate store items for the current page only."""
+		self.card_list.clear()
+		self.table_view.setRowCount(0)
+
+		view_mode = self.view_toggle.currentText().lower()
+		plugins = list(self.plugin_manager.plugins.values())
+		self.count_label.setText(f"{len(plugins)} Supported Game(s)")
+
+		self._filtered = self._collect_filtered()
+		total = len(self._filtered)
+		self._update_pager(total)
+		page, start, end = page_bounds(total, self._page, self._PAGE_SIZE)
+		self._page = page
+		page_items = self._filtered[start:end]
 
 		if view_mode == "list":
 			self.card_list.hide()
 			self.table_view.show()
-			self.table_view.setRowCount(len(filtered))
+			self.table_view.setRowCount(len(page_items))
 
-			for row, (plug, is_det, in_lib) in enumerate(filtered):
+			for row, (plug, is_det, in_lib) in enumerate(page_items):
 				name = getattr(plug, "game_name", "") or getattr(plug, "game_id", "Game")
 				version = getattr(plug, "version", "1.0.0")
 				det_text = "Installed / Save Files Found" if is_det else "Supported"
@@ -503,7 +540,6 @@ class ModernGameStoreInterface(QWidget):
 				self.table_view.setItem(row, 2, QTableWidgetItem(det_text))
 				self.table_view.setItem(row, 3, QTableWidgetItem(lib_text))
 
-				# Actions
 				act_w = QWidget()
 				act_lay = QHBoxLayout(act_w)
 				act_lay.setContentsMargins(4, 2, 4, 2)
@@ -517,11 +553,15 @@ class ModernGameStoreInterface(QWidget):
 				if in_lib:
 					toggle_btn = PushButton(FIF.DELETE, "Remove")
 					toggle_btn.setFixedHeight(26)
-					toggle_btn.clicked.connect(lambda _, p=plug: self._toggle_plugin_in_library(p, in_library=True))
+					toggle_btn.clicked.connect(
+						lambda _, p=plug: self._toggle_plugin_in_library(p, in_library=True)
+					)
 				else:
 					toggle_btn = PrimaryPushButton(FIF.ADD, "Add")
 					toggle_btn.setFixedHeight(26)
-					toggle_btn.clicked.connect(lambda _, p=plug: self._toggle_plugin_in_library(p, in_library=False))
+					toggle_btn.clicked.connect(
+						lambda _, p=plug: self._toggle_plugin_in_library(p, in_library=False)
+					)
 
 				act_lay.addWidget(toggle_btn)
 				self.table_view.setCellWidget(row, 4, act_w)
@@ -530,7 +570,7 @@ class ModernGameStoreInterface(QWidget):
 			self.table_view.hide()
 			self.card_list.show()
 
-			for plug, is_det, in_lib in filtered:
+			for plug, is_det, in_lib in page_items:
 				card = StoreCardWidget(
 					plug,
 					self.config,
@@ -541,7 +581,9 @@ class ModernGameStoreInterface(QWidget):
 				)
 				card.clicked.connect(lambda p=plug: self._open_profile_for_plugin(p))
 				card.profile_requested.connect(lambda p=plug: self._open_profile_for_plugin(p))
-				card.toggle_library_requested.connect(lambda p=plug, lib=in_lib: self._toggle_plugin_in_library(p, lib))
+				card.toggle_library_requested.connect(
+					lambda p=plug, lib=in_lib: self._toggle_plugin_in_library(p, lib)
+				)
 
 				item = QListWidgetItem(self.card_list)
 				item.setSizeHint(self._CARD_GRID_SIZE)
@@ -549,9 +591,21 @@ class ModernGameStoreInterface(QWidget):
 				self.card_list.addItem(item)
 				self.card_list.setItemWidget(item, card)
 
+	def _prev_page(self):
+		if self._page <= 0:
+			return
+		self._page -= 1
+		self._load_store()
+
+	def _next_page(self):
+		pages = max(1, (len(self._filtered) + self._PAGE_SIZE - 1) // self._PAGE_SIZE)
+		if self._page + 1 >= pages:
+			return
+		self._page += 1
+		self._load_store()
+
 	def _open_profile_for_plugin(self, plugin: object):
 		gid = getattr(plugin, "game_id", "")
-		# Check if already in config.games
 		existing = None
 		for prof in self.config.games.values():
 			if prof.plugin_id == gid:
@@ -559,7 +613,6 @@ class ModernGameStoreInterface(QWidget):
 				break
 
 		if existing is None:
-			# Ephemeral profile for viewing
 			existing = GameProfile(
 				id=gid,
 				name=getattr(plugin, "game_name", "") or gid,
@@ -574,7 +627,6 @@ class ModernGameStoreInterface(QWidget):
 		name = getattr(plugin, "game_name", "") or gid
 
 		if in_library:
-			# Remove from library
 			target_id = None
 			for pid, prof in self.config.games.items():
 				if prof.plugin_id == gid or prof.id == gid:
@@ -593,7 +645,6 @@ class ModernGameStoreInterface(QWidget):
 					duration=2500,
 				)
 		else:
-			# Add to library
 			new_prof = GameProfile(
 				id=gid,
 				name=name,
@@ -616,10 +667,15 @@ class ModernGameStoreInterface(QWidget):
 		if not hasattr(self, "_search_timer"):
 			self._search_timer = QTimer(self)
 			self._search_timer.setSingleShot(True)
-			self._search_timer.timeout.connect(self._load_store)
+			self._search_timer.timeout.connect(self._reset_page_and_reload)
 		self._search_timer.start(120)
 
+	def _reset_page_and_reload(self):
+		self._page = 0
+		self._load_store()
+
 	def _on_filter_changed(self, text: str):
+		self._page = 0
 		self._load_store()
 
 	def _on_view_mode_changed(self, text: str):
@@ -627,9 +683,10 @@ class ModernGameStoreInterface(QWidget):
 
 	def _on_table_item_double_clicked(self, item: QTableWidgetItem):
 		row = item.row()
-		plugins = list(self.plugin_manager.plugins.values())
-		if 0 <= row < len(plugins):
-			self._open_profile_for_plugin(plugins[row])
+		page, start, end = page_bounds(len(self._filtered), self._page, self._PAGE_SIZE)
+		page_items = self._filtered[start:end]
+		if 0 <= row < len(page_items):
+			self._open_profile_for_plugin(page_items[row][0])
 
 	def _reload_plugins(self):
 		hot = getattr(self.window(), "_plugin_hot", None)
@@ -638,6 +695,7 @@ class ModernGameStoreInterface(QWidget):
 			return
 		self.plugin_manager.reload_plugins(hot=True)
 		self._scan_detected_games_initial()
+		self._page = 0
 		self._load_store()
 		InfoBar.success(
 			title="Plugins Reloaded",

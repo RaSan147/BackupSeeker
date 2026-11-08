@@ -26,7 +26,7 @@ PC gamers lose progress when saves are corrupted, overwritten, or lost during re
 | Restore | List backups per profile; optional clear destination; Safety ZIP before extract; guarded ZIP member handling. |
 | Plugins | Python modules under `BackupSeeker/plugins/` with `get_plugins()` or auto-discovered `GamePlugin` classes; JSON array in `games.jsonc`; declarative **`save_sources`** per plugin; optional `plugin_index.json` whitelist/blocklist; registry and path-based detection derived from sources. |
 | Configuration | JSON config at `BackupSeeker/gsm_config.json`; corruption rotation to `.corrupted` and fresh defaults. |
-| UI | Default entry via `BackupSeeker.main` → Fluent UI package when import succeeds; fallback to legacy `BackupSeeker.ui`. |
+| UI | Entry via `BackupSeeker.main` → Fluent UI (`BackupSeeker.ui_fluent`). |
 
 ## Out of scope (for this PRD)
 
