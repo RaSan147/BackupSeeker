@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY
 
 
@@ -40,8 +40,7 @@ class NeedForSpeedCarbonPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://upload.wikimedia.org/wikipedia/en/2/2a/Need_for_Speed_Carbon_Coverart.jpg"
+		return "https://upload.wikimedia.org/wikipedia/en/a/a4/Need_for_Speed_Carbon_Game_Cover.jpg"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [NeedForSpeedCarbonPlugin]

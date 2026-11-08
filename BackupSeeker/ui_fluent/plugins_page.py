@@ -232,6 +232,9 @@ class ModernPluginsInterface(QWidget):
 
     def _detect_games(self):
         """Detect installed games and highlight results; do not auto-add."""
+        from ..plugins.base import invalidate_detection_caches
+
+        invalidate_detection_caches()
         # Perform detection scan (expensive) and highlight detected rows
         detected_ids = {p.game_id for p in self.plugin_manager.available_plugins.values() if p.is_detected()}
 

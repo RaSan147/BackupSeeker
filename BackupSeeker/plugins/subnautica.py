@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from ..core import PathUtils
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
 _STEAM_APP_ID = "264710"
@@ -84,5 +84,4 @@ class SubnauticaPlugin(GamePlugin):
 		return self.get_unity_install_path_from_log("Unknown Worlds", "Subnautica")
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [SubnauticaPlugin]

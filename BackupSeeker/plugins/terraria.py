@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
 _STEAM_APP_ID = "105600"
@@ -56,5 +56,4 @@ class TerrariaPlugin(GamePlugin):
 		return "https://cdn.cloudflare.steamstatic.com/steam/apps/105600/capsule_616x353.jpg"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [TerrariaPlugin]

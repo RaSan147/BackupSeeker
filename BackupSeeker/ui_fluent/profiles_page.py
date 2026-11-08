@@ -413,16 +413,6 @@ class ModernProfilesInterface(QWidget):
         if not profile:
             return
 
-        # Prefer to reuse dashboard logic which will open the editor or
-        # open the plugin/json/python source in Explorer when appropriate.
-        win = self.window()
-        dashboard = win.dashboard
-        if dashboard:
-            dashboard.open_profile_editor_or_source(profile_id)
-            return
-
-
-        # Fallback: open using in-app editor
         editor = ModernGameEditor(profile, self)
         if editor.exec():
             self.config.save_config()

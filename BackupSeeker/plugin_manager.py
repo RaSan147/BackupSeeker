@@ -19,6 +19,9 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+
+from .plugins.base import GamePlugin, normalize_poster_sources, plugin_from_json
+
 logger = logging.getLogger(__name__)
 
 # Shared plugin infrastructure - not game plugins; never reported as load warnings.
@@ -156,7 +159,7 @@ class PluginManager:
 	def __init__(self, base_dir: Path) -> None:
 		self.base_dir = base_dir
 		self.plugins_dir = base_dir / "plugins"
-		self.available_plugins: dict[str, object] = {}
+		self.available_plugins: dict[str, GamePlugin] = {}
 		# directory to store downloaded/copied plugin assets (images)
 		self.data_dir = Path(base_dir) / "data"
 		self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -168,7 +171,7 @@ class PluginManager:
 		self._asset_loading: set[str] = set()
 		self._asset_callbacks: dict[str, list[callable]] = {}
 		self._asset_locks: dict[str, threading.RLock] = {}
-		self._download_semaphore = threading.Semaphore(2)
+		self._download_semaphore = threading.Semaphore(6)
 		self._asset_retry_after: dict[str, float] = {}
 		self.last_load_report: PluginLoadReport = PluginLoadReport()
 		self.reload_plugins(hot=False)
@@ -217,6 +220,9 @@ class PluginManager:
 		if hot:
 			purged = self._purge_plugin_package_modules()
 
+		# Always rebind after a possible purge (and on cold start for consistency).
+		self._rebind_base_exports()
+
 		self.available_plugins.clear()
 		self._asset_loading.clear()
 		self._asset_callbacks.clear()
@@ -245,6 +251,9 @@ class PluginManager:
 			hot=hot,
 		)
 		self.last_load_report = report
+		# Always bind cached poster paths onto fresh instances. Skipping this on hot
+		# reload forced every store/library card to call ensure_plugin_visual_assets
+		# on the UI thread and felt like a freeze.
 		self.hydrate_all_plugins_from_cache()
 		if self.on_reload is not None:
 			try:
@@ -269,17 +278,27 @@ class PluginManager:
 				purged.append(name)
 		return sorted(purged)
 
+	def _rebind_base_exports(self) -> type[GamePlugin]:
+		"""Re-import ``GamePlugin`` after a purge so ``issubclass`` checks stay valid.
+
+		Hot reload deletes ``BackupSeeker.plugins.base`` from ``sys.modules``. Plugin
+		modules then subclass a *new* ``GamePlugin``, while this module would still
+		hold the old class object — every ``EXPORT`` class fails ``issubclass`` and
+		only JSON plugins (built against whatever ``plugin_from_json`` still
+		references) would remain visible.
+		"""
+
+		global GamePlugin, plugin_from_json
+		from .plugins import base as base_mod
+
+		GamePlugin = base_mod.GamePlugin
+		plugin_from_json = base_mod.plugin_from_json
+		return GamePlugin
+
 	def get_plugin_for_profile(self, plugin_id: str | None):
 		if not plugin_id:
 			return None
 		return self.available_plugins.get(plugin_id)
-
-	def _plugins_base(self):
-		"""Import ``plugins.base`` after each purge so ``isinstance`` checks stay valid."""
-
-		pkg_name = __package__.rsplit(".", 1)[0]
-		mod = importlib.import_module(f"{pkg_name}.plugins.base")
-		return mod.GamePlugin, mod.plugin_from_json
 
 	def _register_plugin(
 		self,
@@ -350,8 +369,7 @@ class PluginManager:
 			return module_count, issues
 
 		allowed, disabled = self._plugin_index_filter()
-		pkg_name = __package__.rsplit(".", 1)[0]
-		GamePlugin, _plugin_from_json = self._plugins_base()
+		
 		for _finder, name, _ispkg in pkgutil.iter_modules([str(self.plugins_dir)]):
 			if name.startswith("__"):
 				continue
@@ -373,31 +391,16 @@ class PluginManager:
 				continue
 			module_count += 1
 			try:
-				full_name = f"{pkg_name}.plugins.{name}"
-				module = importlib.import_module(full_name)
-				get_plugins_fn = getattr(module, "get_plugins", None)
-				if not callable(get_plugins_fn):
-					issues.append(
-						PluginLoadIssue(
-							"warning",
-							source,
-							f"Module {name!r} has no callable get_plugins(); skipped.",
-							f"Expected get_plugins() -> list[GamePlugin] in {mod_path}",
-						)
-					)
-					continue
-				try:
-					plugins = get_plugins_fn()
-				except Exception as exc:
-					logger.exception("get_plugins() failed for %s", name)
-					issues.append(_issue_from_exception(source, exc, context="get_plugins() raised"))
-					continue
+				full_name = f".plugins.{name}"
+				module = importlib.import_module(full_name, package=__package__)
+
+				plugins = getattr(module, "EXPORT", None)
 				if plugins is None:
 					issues.append(
 						PluginLoadIssue(
 							"warning",
 							source,
-							"get_plugins() returned None; expected a list.",
+							"EXPORT is missing; expected a list of GamePlugin classes.",
 							"",
 						)
 					)
@@ -407,7 +410,7 @@ class PluginManager:
 						PluginLoadIssue(
 							"error",
 							source,
-							f"get_plugins() returned {type(plugins).__name__}, expected list or tuple.",
+							f"EXPORT is {type(plugins).__name__}, expected list or tuple.",
 							"",
 						)
 					)
@@ -417,24 +420,18 @@ class PluginManager:
 						PluginLoadIssue(
 							"warning",
 							source,
-							"get_plugins() returned an empty list.",
+							"EXPORT is empty.",
 							"",
 						)
 					)
-				for idx, plugin in enumerate(plugins):
-					if not isinstance(plugin, GamePlugin):
-						issues.append(
-							PluginLoadIssue(
-								"error",
-								f"{source}#[{idx}]",
-								f"Entry {idx} is {type(plugin).__name__}, not GamePlugin.",
-								"Each get_plugins() item must be a GamePlugin instance.",
-							)
-						)
-						continue
+					continue
+				for idx, entry in enumerate(plugins):
 					try:
-						self._init_plugin_asset_slots(plugin)
-						self._register_plugin(plugin, f"{source}#[{idx}]", issues)
+						plugin_obj = self._instantiate_export_entry(entry, f"{source}#[{idx}]", issues)
+						if plugin_obj is None:
+							continue
+						self._init_plugin_asset_slots(plugin_obj)
+						self._register_plugin(plugin_obj, f"{source}#[{idx}]", issues)
 					except Exception as exc:
 						logger.exception("Failed registering plugin from %s index %s", name, idx)
 						issues.append(_issue_from_exception(f"{source}#[{idx}]", exc, context="register"))
@@ -443,9 +440,47 @@ class PluginManager:
 				issues.append(_issue_from_exception(source, exc, context="import module"))
 		return module_count, issues
 
+	def _instantiate_export_entry(
+		self,
+		entry: object,
+		source: str,
+		issues: list[PluginLoadIssue],
+	) -> GamePlugin | None:
+		"""Accept ``EXPORT`` entries as GamePlugin classes or already-built instances."""
+
+		gp = GamePlugin
+		if isinstance(entry, type):
+			try:
+				ok = issubclass(entry, gp)
+			except TypeError:
+				ok = False
+			if not ok:
+				issues.append(
+					PluginLoadIssue(
+						"error",
+						source,
+						f"Entry is class {entry.__name__}, not a GamePlugin subclass.",
+						"Each EXPORT item must be a GamePlugin subclass (or instance).",
+					)
+				)
+				return None
+			return entry()  # type: ignore[misc]
+
+		if isinstance(entry, gp):
+			return entry
+
+		issues.append(
+			PluginLoadIssue(
+				"error",
+				source,
+				f"Entry is {type(entry).__name__}, not a GamePlugin class/instance.",
+				"Each EXPORT item must be a GamePlugin subclass (or instance).",
+			)
+		)
+		return None
+
 	def _load_json_plugins(self) -> list[PluginLoadIssue]:
 		issues: list[PluginLoadIssue] = []
-		_GamePlugin, plugin_from_json = self._plugins_base()
 		jsonc_path = self.plugins_dir / "games.jsonc"
 		if not jsonc_path.exists():
 			return issues
@@ -502,18 +537,46 @@ class PluginManager:
 				detected.append(plugin.to_profile())
 		return detected
 
-	def _poster_still_needed(self, plugin: object) -> bool:
-		"""True while a configured poster is not yet available on disk."""
+	def _poster_sources(self, plugin: GamePlugin) -> list[str]:
+		"""Ordered poster URL/path candidates from ``plugin.poster`` (str or list)."""
 
-		poster = (getattr(plugin, "poster", "") or "").strip()
-		if not poster:
+		return normalize_poster_sources(plugin.poster)
+
+	def _poster_source_ready(self, plugin: GamePlugin, source: str) -> bool:
+		"""True when ``source`` is already usable locally (cache hit or existing file)."""
+
+		source = (source or "").strip()
+		if not source:
 			return False
+		if source.lower().startswith(("http://", "https://")):
+			dest = self._asset_cache_path(plugin, "poster", source)
+			return dest is not None and self._asset_cache_hit(dest)
+		return Path(source).exists()
+
+	def _poster_still_needed(self, plugin: GamePlugin) -> bool:
+		"""True while no poster candidate is available on disk yet."""
+
 		if getattr(plugin, "_saved_poster", ""):
 			return False
-		if poster.lower().startswith(("http://", "https://")):
-			dest = self._asset_cache_path(plugin, "poster", poster)
-			return dest is not None and not self._asset_cache_hit(dest)
-		return not Path(poster).exists()
+		sources = self._poster_sources(plugin)
+		if not sources:
+			return False
+		if any(self._poster_source_ready(plugin, src) for src in sources):
+			return False
+		# Keep trying only while at least one remote candidate remains.
+		return any(src.lower().startswith(("http://", "https://")) for src in sources)
+
+	def _poster_needs_processing(self, plugin: GamePlugin) -> bool:
+		"""True when poster download/copy is still required (no ready candidate)."""
+
+		if getattr(plugin, "_saved_poster", ""):
+			return False
+		sources = self._poster_sources(plugin)
+		if not sources:
+			return False
+		if any(self._poster_source_ready(plugin, src) for src in sources):
+			return False
+		return any(self._asset_needs_processing(plugin, "poster", src) for src in sources)
 
 	def _sync_visual_assets_loaded_flag(self, plugin: object) -> None:
 		plugin._visual_assets_loaded = not self._poster_still_needed(plugin)
@@ -548,15 +611,18 @@ class PluginManager:
 		dest.parent.mkdir(parents=True, exist_ok=True)
 		tmp = dest.with_name(dest.name + ".part")
 		last_err: BaseException | None = None
-		max_attempts = 5
+		max_attempts = 4
 
 		with self._download_semaphore:
 			for attempt in range(max_attempts):
 				try:
-					r = self._http.get(url, headers=headers, timeout=(4.0, 12.0))
+					r = self._http.get(url, headers=headers, timeout=(4.0, 10.0))
+					if r.status_code in (404, 410):
+						logging.debug("Permanent miss %s — not retrying", url)
+						return False
 					if r.status_code == 429:
 						last_err = requests.HTTPError(f"429 Too Many Requests for {url}")
-						delay = min(8.0, 0.6 * (2 ** attempt))
+						delay = min(4.0, 0.4 * (2 ** attempt))
 						logging.debug(
 							"Rate-limited downloading %s (attempt %s/%s); retry in %.1fs",
 							url,
@@ -574,17 +640,16 @@ class PluginManager:
 							url,
 							len(data),
 						)
-						last_err = ValueError("response is not image data")
-					else:
+						return False
+					tmp.write_bytes(data)
+					try:
+						tmp.replace(dest)
+					except OSError:
+						# Windows can briefly lock a previous file; retry write+replace once
+						time.sleep(0.15)
 						tmp.write_bytes(data)
-						try:
-							tmp.replace(dest)
-						except OSError:
-							# Windows can briefly lock a previous file; retry write+replace once
-							time.sleep(0.15)
-							tmp.write_bytes(data)
-							tmp.replace(dest)
-						return True
+						tmp.replace(dest)
+					return True
 				except Exception as e:
 					last_err = e
 					logging.debug(
@@ -595,7 +660,7 @@ class PluginManager:
 						e,
 					)
 					if attempt < max_attempts - 1:
-						time.sleep(min(6.0, 0.4 * (2 ** attempt)))
+						time.sleep(min(3.0, 0.35 * (2 ** attempt)))
 
 		try:
 			if tmp.exists():
@@ -697,7 +762,7 @@ class PluginManager:
 			return self._poster_still_needed(plugin)
 
 		need_icon = self._asset_needs_processing(plugin, "icon", getattr(plugin, "icon", "") or "")
-		need_poster = self._asset_needs_processing(plugin, "poster", getattr(plugin, "poster", "") or "")
+		need_poster = self._poster_needs_processing(plugin)
 		if need_icon or need_poster:
 			return True
 
@@ -712,17 +777,17 @@ class PluginManager:
 		self._sync_visual_assets_loaded_flag(plugin)
 		return self._poster_still_needed(plugin)
 
-	def hydrate_all_plugins_from_cache(self) -> list[object]:
+	def hydrate_all_plugins_from_cache(self) -> list[GamePlugin]:
 		"""Hydrate every loaded plugin from disk cache. Returns plugins still needing download."""
 
-		pending: list[object] = []
+		pending: list[GamePlugin] = []
 		for plugin in self.available_plugins.values():
 			if self.hydrate_plugin_from_cache(plugin):
 				pending.append(plugin)
 		return pending
 
-	def _finish_visual_asset_callbacks(self, plugin: object) -> None:
-		gid = (getattr(plugin, "game_id", "") or "").strip()
+	def _finish_visual_asset_callbacks(self, plugin: GamePlugin) -> None:
+		gid = plugin.game_id
 		callbacks: list[callable] = []
 		if gid:
 			with self._asset_lock_for(gid):
@@ -744,19 +809,19 @@ class PluginManager:
 
 		self._dispatch_on_main_thread(dispatch)
 
-	def ensure_plugin_visual_assets(self, plugin: object | None, on_complete: callable | None = None) -> None:
+	def ensure_plugin_visual_assets(self, plugin: GamePlugin | None, on_complete: callable | None = None) -> None:
 		"""Materialize icon/poster files on first use so startup does not fetch every plugin asset."""
 
 		if plugin is None:
 			return
-		gid = (getattr(plugin, "game_id", "") or "").strip() or "?"
+		gid = plugin.game_id
 		if getattr(plugin, "_visual_assets_loaded", False):
 			return
 
 		# Check if download or copy is actually needed
 		need_processing = self._asset_needs_processing(
 			plugin, "icon", getattr(plugin, "icon", "") or ""
-		) or self._asset_needs_processing(plugin, "poster", getattr(plugin, "poster", "") or "")
+		) or self._poster_needs_processing(plugin)
 
 		with self._asset_lock_for(gid):
 			if on_complete:
@@ -797,11 +862,11 @@ class PluginManager:
 
 		threading.Thread(target=worker, daemon=True, name=f"plugin-assets-{gid}").start()
 
-	def _schedule_asset_retry(self, plugin: object, delay: float) -> None:
+	def _schedule_asset_retry(self, plugin: GamePlugin, delay: float) -> None:
 		"""Queue a deferred poster retry so rate-limited downloads are not abandoned."""
 
 		delay = max(0.25, float(delay))
-		gid = (getattr(plugin, "game_id", "") or "").strip() or "?"
+		gid = plugin.game_id
 
 		def retry() -> None:
 			try:
@@ -811,7 +876,7 @@ class PluginManager:
 
 		threading.Timer(delay, retry).start()
 
-	def _process_plugin_asset(self, plugin: object, asset_type: str, asset_value: str) -> str:
+	def _process_plugin_asset(self, plugin: GamePlugin, asset_type: str, asset_value: str) -> str:
 		"""Download or copy a plugin icon/poster into the cache using a hash-based path."""
 
 		if not asset_value:
@@ -842,7 +907,7 @@ class PluginManager:
 				logging.exception(
 					"Failed to download %s for %s from %s",
 					asset_type,
-					getattr(plugin, "game_id", "?"),
+					plugin.game_id,
 					asset_value,
 				)
 			return ""
@@ -854,13 +919,49 @@ class PluginManager:
 			logging.exception(
 				"Failed to copy %s for %s from %s",
 				asset_type,
-				getattr(plugin, "game_id", "?"),
+				plugin.game_id,
 				asset_value,
 			)
 			return ""
 
-	def _process_plugin_icon(self, plugin: object) -> None:
+	def prefetch_all_missing_posters(self, max_workers: int = 4) -> None:
+		"""Kick off missing posters for every loaded plugin, non-blocking."""
+		from concurrent.futures import ThreadPoolExecutor
+
+		pending = [
+			p for p in self.available_plugins.values()
+			if not getattr(p, "_saved_poster", "")
+			and any(
+				src.lower().startswith(("http://", "https://"))
+				for src in self._poster_sources(p)
+			)
+		]
+		if not pending:
+			return
+
+		def _one(p: GamePlugin) -> None:
+			try:
+				self.ensure_plugin_visual_assets(p)
+			except Exception:
+				logger.debug("prefetch failed for %r", getattr(p, "game_id", "?"), exc_info=True)
+
+		# Fire-and-forget: keep the pool alive via daemon threads inside ensure_*.
+		ex = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="poster-prefetch")
+		for p in pending:
+			ex.submit(_one, p)
+		ex.shutdown(wait=False)
+
+	def _process_plugin_icon(self, plugin: GamePlugin) -> None:
 		plugin._saved_icon = self._process_plugin_asset(plugin, "icon", plugin.icon or "")
 
-	def _process_plugin_poster(self, plugin: object) -> None:
-		plugin._saved_poster = self._process_plugin_asset(plugin, "poster", plugin.poster or "")
+	def _process_plugin_poster(self, plugin: GamePlugin) -> None:
+		"""Try poster candidates in order; first successful download/copy wins."""
+
+		plugin._saved_poster = ""
+		plugin._poster_source = ""
+		for source in self._poster_sources(plugin):
+			path = self._process_plugin_asset(plugin, "poster", source)
+			if path:
+				plugin._saved_poster = path
+				plugin._poster_source = source
+				return

@@ -34,6 +34,8 @@ from qfluentwidgets import (
 	FluentIcon as FIF,
 )
 
+from BackupSeeker.plugins.base import GamePlugin
+
 from ..core import ConfigManager, GameProfile
 from ..developer_mode import is_developer_mode
 from ..fluent_window import toast_parent
@@ -287,12 +289,17 @@ class ModernGameStoreInterface(QWidget):
 			self, plugin_manager=plugin_manager, app_dir=config.app_dir
 		)
 		self._detected_game_ids: set[str] = set()
+		self._plugin_cache: dict[str, GamePlugin] | None = None
 
 		self._setup_ui()
 		self._scan_detected_games_initial()
 		self._load_store()
 		if self._poster_refresh is not None:
 			self._poster_refresh.register(self.refresh_posters)
+
+	def set_plugin_cache(self, cache: dict[str, GamePlugin] | None) -> None:
+		"""Optional per-reload plugin lookup cache supplied by the main window."""
+		self._plugin_cache = cache
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -412,6 +419,9 @@ class ModernGameStoreInterface(QWidget):
 
 	def _detect_games(self):
 		"""Deep detection scan with toast summary."""
+		from ..plugins.base import invalidate_detection_caches
+
+		invalidate_detection_caches()
 		found = []
 		for p in self.plugin_manager.plugins.values():
 			try:
@@ -641,4 +651,21 @@ class ModernGameStoreInterface(QWidget):
 		self._load_store()
 
 	def refresh_posters(self, plugin_game_id: str | None = None) -> None:
-		self._load_store()
+		"""Update poster pixmaps in place — do not rebuild the whole store."""
+		updated = False
+		for i in range(self.card_list.count()):
+			item = self.card_list.item(i)
+			widget = self.card_list.itemWidget(item)
+			if widget is None or not hasattr(widget, "_load_poster"):
+				continue
+			if plugin_game_id:
+				gid = getattr(getattr(widget, "plugin", None), "game_id", None)
+				if gid != plugin_game_id:
+					continue
+			try:
+				widget._load_poster()
+				updated = True
+			except Exception:
+				pass
+		if not updated and plugin_game_id is None and self.card_list.count() == 0:
+			self._load_store()

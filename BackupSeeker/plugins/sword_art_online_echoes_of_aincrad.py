@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
 _STEAM_APP_ID = "2244210"
@@ -50,5 +50,4 @@ class SwordArtOnlineEchoesOfAincradPlugin(GamePlugin):
 		return "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2244210/25fb6350451b21ca824562c8d1eebe89091347cc/header.jpg"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [SwordArtOnlineEchoesOfAincradPlugin]

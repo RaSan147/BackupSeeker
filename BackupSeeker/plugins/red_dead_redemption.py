@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
 _STEAM_APP_ID = "2668510"
@@ -56,9 +56,13 @@ class RedDeadRedemptionPlugin(GamePlugin):
 		return sources
 
 	@property
-	def poster(self) -> str:
-		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
+	def poster(self) -> list[str]:
+		base = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}"
+		return [
+			f"{base}/capsule_616x353.jpg",
+			f"{base}/header.jpg",
+			f"{base}/library_hero.jpg",
+		]
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [RedDeadRedemptionPlugin]

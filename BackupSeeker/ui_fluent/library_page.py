@@ -240,10 +240,15 @@ class ModernLibraryInterface(QWidget):
 		self._posters = ProfilePosterService(
 			self, plugin_manager=plugin_manager, app_dir=config.app_dir
 		)
+		self._plugin_cache: dict[str, object] | None = None
 		self._setup_ui()
 		self._load_library()
 		if self._poster_refresh is not None:
 			self._poster_refresh.register(self.refresh_posters)
+
+	def set_plugin_cache(self, cache: dict[str, object] | None) -> None:
+		"""Optional per-reload plugin lookup cache supplied by the main window."""
+		self._plugin_cache = cache
 
 	def _setup_ui(self):
 		layout = QVBoxLayout(self)
@@ -324,15 +329,16 @@ class ModernLibraryInterface(QWidget):
 
 		# 2. Table List View
 		self.table_view = TableWidget()
-		self.table_view.setColumnCount(4)
+		self.table_view.setColumnCount(5)
 		self.table_view.setHorizontalHeaderLabels(
-			["Game", "Type", "Last Backup", "Actions"]
+			["Game", "Type", "Save Status", "Last Backup", "Actions"]
 		)
 		t_header = self.table_view.horizontalHeader()
 		t_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
 		t_header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
 		t_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
 		t_header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+		t_header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
 		self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		self.table_view.setAlternatingRowColors(True)
 		styles = get_theme_styles()
@@ -382,6 +388,12 @@ class ModernLibraryInterface(QWidget):
 
 		layout.addWidget(self.content_container)
 
+	def _resolve_plugin(self, profile: GameProfile):
+		cache = getattr(self, "_plugin_cache", None)
+		if cache is not None and profile.plugin_id:
+			return cache.get(profile.plugin_id)
+		return resolve_plugin_for_profile(profile, self)
+
 	def _load_library(self):
 		"""Populate games in library."""
 		self.card_list.clear()
@@ -397,7 +409,7 @@ class ModernLibraryInterface(QWidget):
 		# Apply filters
 		filtered = []
 		for p in profiles:
-			plug = resolve_plugin_for_profile(p, self)
+			plug = self._resolve_plugin(p)
 			name = p.resolved_name(plug).lower()
 			if query and query not in name and query not in (p.id or "").lower():
 				continue
@@ -426,13 +438,11 @@ class ModernLibraryInterface(QWidget):
 				status_text = p.effective_save_path(plug) or "Configured"
 				last_bk = last_backup_label(p, self, self.config)
 
-				# Item 0: Name
-				self.table_view.setItem(row, 0, QTableWidgetItem(name_text))
-				# Item 1: Type
+				name_item = QTableWidgetItem(name_text)
+				name_item.setData(Qt.ItemDataRole.UserRole, p)
+				self.table_view.setItem(row, 0, name_item)
 				self.table_view.setItem(row, 1, QTableWidgetItem(type_text))
-				# Item 2: Save Status
 				self.table_view.setItem(row, 2, QTableWidgetItem(status_text))
-				# Item 3: Last Backup
 				self.table_view.setItem(row, 3, QTableWidgetItem(last_bk))
 
 				# Actions widget
@@ -492,17 +502,22 @@ class ModernLibraryInterface(QWidget):
 		self._load_library()
 
 	def _on_table_item_double_clicked(self, item: QTableWidgetItem):
-		row = item.row()
-		# Retrieve profile for this row
-		profiles = list(self.config.games.values())
-		if 0 <= row < len(profiles):
-			self.game_profile_requested.emit(profiles[row])
+		prof = item.data(Qt.ItemDataRole.UserRole)
+		if prof is not None:
+			self.game_profile_requested.emit(prof)
+			return
+		# Fallback: read the profile stored on column 0 of this row
+		name_item = self.table_view.item(item.row(), 0)
+		if name_item is not None:
+			prof = name_item.data(Qt.ItemDataRole.UserRole)
+			if prof is not None:
+				self.game_profile_requested.emit(prof)
 
 	def _on_add_custom_game(self):
 		"""Open modern game editor to create a custom profile."""
 		editor = ModernGameEditor(parent=self)
 		if editor.exec():
-			new_prof = editor.get_profile()
+			new_prof = editor.profile
 			self.config.games[new_prof.id] = new_prof
 			self.config.save_config()
 			self.reload()
@@ -516,7 +531,7 @@ class ModernLibraryInterface(QWidget):
 
 	def _run_quick_backup(self, profile: GameProfile):
 		try:
-			plugin = resolve_plugin_for_profile(profile, self)
+			plugin = self._resolve_plugin(profile)
 			dest = run_backup(profile, self.config, plugin)
 			if dest and dest.exists():
 				InfoBar.success(
@@ -560,4 +575,22 @@ class ModernLibraryInterface(QWidget):
 		self._load_library()
 
 	def refresh_posters(self, plugin_game_id: str | None = None) -> None:
-		self._load_library()
+		"""Update poster pixmaps in place — do not rebuild the whole library."""
+		updated = False
+		for i in range(self.card_list.count()):
+			item = self.card_list.item(i)
+			widget = self.card_list.itemWidget(item)
+			if widget is None or not hasattr(widget, "_load_poster"):
+				continue
+			if plugin_game_id:
+				prof = getattr(widget, "profile", None)
+				pid = getattr(prof, "plugin_id", None) if prof is not None else None
+				if pid != plugin_game_id:
+					continue
+			try:
+				widget._load_poster()
+				updated = True
+			except Exception:
+				pass
+		if not updated and plugin_game_id is None and self.card_list.count() == 0:
+			self._load_library()

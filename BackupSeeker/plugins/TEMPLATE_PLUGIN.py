@@ -61,15 +61,4 @@ class TemplatePlugin(GamePlugin):
         # include keys like `backup_path` with the created archive path.
         return result_data
 
-
-def get_plugins():
-    """Return a list of active plugin instances for the loader.
-    
-    Option 1 (manual - useful for selective loading):
-        return [TemplatePlugin()]
-    
-    Option 2 (auto-discovery - finds all GamePlugin subclasses above):
-        return auto_get_plugins()
-    """
-    # For this template, we show the manual approach:
-    return [TemplatePlugin()]
+EXPORT = [TemplatePlugin]

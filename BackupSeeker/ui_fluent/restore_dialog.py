@@ -173,13 +173,13 @@ class RestoreBackupDialog(QDialog):
         
         # Add regular backups
         if backup_dir.exists():
-            for file in backup_dir.glob("*.zip"):
-                backups.append((file, "Regular"))
+            for backup_path in backup_dir.glob("*.zip"):
+                backups.append((backup_path, "Regular"))
                 
         # Add safety backups
         if safety_dir.exists():
-            for file in safety_dir.glob("*.zip"):
-                backups.append((file, "Safety"))
+            for backup_path in safety_dir.glob("*.zip"):
+                backups.append((backup_path, "Safety"))
                 
         # Sort by modification time (newest first)
         backups.sort(key=lambda x: x[0].stat().st_mtime, reverse=True)
@@ -188,19 +188,19 @@ class RestoreBackupDialog(QDialog):
         mode = self.view_toggle.currentText()
         is_cards = (mode or '').lower().startswith('c')
         
-        for file, backup_type in backups:
+        for backup_path, backup_type in backups:
             # Prepare common data
             type_icon = "🛡️ Safety" if backup_type == "Safety" else "💾 Regular"
-            mtime = file.stat().st_mtime
+            mtime = backup_path.stat().st_mtime
             date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-            size_bytes = file.stat().st_size
+            size_bytes = backup_path.stat().st_size
             if size_bytes < 1024 * 1024:
                 size_str = f"{size_bytes/1024:.1f} KB"
             else:
                 size_str = f"{size_bytes/1024/1024:.1f} MB"
 
-            meta = cached_archive_metadata(file)
-            summ = summarize_archive_metadata(meta, zip_path=file)
+            meta = cached_archive_metadata(backup_path)
+            summ = summarize_archive_metadata(meta, zip_path=backup_path)
             arch_line = summ.get("summary", "")
             arch_tip = summ.get("tooltip", "")
             
@@ -208,7 +208,7 @@ class RestoreBackupDialog(QDialog):
                 # Add to card list
                 item = QListWidgetItem()
                 item.setSizeHint(QSize(280, 200))
-                item.setData(Qt.ItemDataRole.UserRole, file)
+                item.setData(Qt.ItemDataRole.UserRole, backup_path)
                 self.backups_card_list.addItem(item)
                 
                 backup_data = {
@@ -217,8 +217,8 @@ class RestoreBackupDialog(QDialog):
                     "size": size_str,
                     "archive": arch_line,
                     "archive_tooltip": arch_tip,
-                    "filename": file.name,
-                    "file": file
+                    "filename": backup_path.name,
+                    "file": backup_path,
                 }
                 widget = self._create_backup_card(backup_data)
                 self.backups_card_list.setItemWidget(item, widget)
@@ -241,9 +241,9 @@ class RestoreBackupDialog(QDialog):
                 self.backups_table.setItem(row, 3, arch_item)
                 
                 # Filename
-                item = QTableWidgetItem(file.name)
-                item.setData(Qt.ItemDataRole.UserRole, file)  # Store file path
-                item.setToolTip(file.name)
+                item = QTableWidgetItem(backup_path.name)
+                item.setData(Qt.ItemDataRole.UserRole, backup_path)
+                item.setToolTip(backup_path.name)
                 self.backups_table.setItem(row, 4, item)
         
         # Toggle visibility
@@ -385,7 +385,7 @@ class RestoreBackupDialog(QDialog):
             
             # Determine type from the list
             # Since we don't store type directly, check file location
-            safety_dir = self.config.get_safety_backup_dir(self._disp)
+            safety_dir = self.config.safety_backup_dir_for_profile(self.profile, self._plug)
             is_safety = backup_file.parent == safety_dir
             backup_type = "Safety" if is_safety else "Regular"
         else:

@@ -4,6 +4,9 @@ try:
 	import winreg
 except Exception:  # pragma: no cover - non-Windows environments
 	winreg = None
+
+import os
+from functools import lru_cache
 import inspect
 import logging
 import platform
@@ -11,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 from ..core import PathUtils, zip_sanitized_key
 from .prompt_validation import normalize_validations
@@ -30,6 +33,33 @@ if TYPE_CHECKING:
 	from ..core import GameProfile
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_poster_sources(poster: str | Sequence[str] | None) -> list[str]:
+	"""Flatten ``poster`` to a de-duplicated list of non-empty source strings.
+
+	Plugins may return a single URL/path or an ordered fallback list. Icons are
+	intentionally excluded — they may mix emoji with paths/URLs and are not
+	multi-candidate.
+	"""
+
+	if poster is None:
+		return []
+	if isinstance(poster, str):
+		text = poster.strip()
+		return [text] if text else []
+	if isinstance(poster, Sequence) and not isinstance(poster, (bytes, bytearray)):
+		out: list[str] = []
+		seen: set[str] = set()
+		for item in poster:
+			text = str(item).strip()
+			if not text or text in seen:
+				continue
+			seen.add(text)
+			out.append(text)
+		return out
+	text = str(poster).strip()
+	return [text] if text else []
 
 
 @dataclass(frozen=True)
@@ -234,8 +264,8 @@ class GamePlugin(ABC):
 		return ""  # Default empty string
 
 	@property
-	def poster(self) -> str:
-		"""Optional poster image for the game (URL or path to image file)."""
+	def poster(self) -> str | list[str]:
+		"""Optional poster image(s): one URL/path, or ordered fallbacks to try."""
 		return ""  # Default empty string
 
 	# --- Optional lifecycle hooks (override as needed) ---
@@ -289,83 +319,69 @@ class GamePlugin(ABC):
 				continue
 		return False
 
-	def _check_registry(self) -> bool:
-		"""Check if the game is installed via registry keys (Windows only).
-		
-		Returns False silently if:
-		- winreg is unavailable (non-Windows)
-		- registry keys are not configured
-		- keys don't exist (normal for uninstalled games)
-		"""
+	@staticmethod
+	def _registry_hive(hkey_str: str):
 		if winreg is None:
-			return False
-		
-		for key_path, value_name in self.registry_keys:
-			try:
-				hkey_str, _, sub_key = key_path.partition('\\')
-				hkey = (
-					winreg.HKEY_CLASSES_ROOT if hkey_str == "HKEY_CLASSES_ROOT"
-					else winreg.HKEY_LOCAL_MACHINE if hkey_str == "HKEY_LOCAL_MACHINE"
-					else winreg.HKEY_USERS if hkey_str == "HKEY_USERS"
-					else winreg.HKEY_CURRENT_CONFIG if hkey_str == "HKEY_CURRENT_CONFIG"
-					else winreg.HKEY_CURRENT_USER
-				)
-				
-				# Try default, 32-bit (WOW6432Node), and 64-bit registry views
-				masks = [winreg.KEY_READ]
-				if hasattr(winreg, "KEY_WOW64_32KEY"):
-					masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
-				if hasattr(winreg, "KEY_WOW64_64KEY"):
-					masks.append(winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+			return None
+		return {
+			"HKEY_CLASSES_ROOT": winreg.HKEY_CLASSES_ROOT,
+			"HKEY_CURRENT_USER": winreg.HKEY_CURRENT_USER,
+			"HKEY_LOCAL_MACHINE": winreg.HKEY_LOCAL_MACHINE,
+			"HKEY_USERS": winreg.HKEY_USERS,
+			"HKEY_CURRENT_CONFIG": winreg.HKEY_CURRENT_CONFIG,
+		}.get(hkey_str, winreg.HKEY_CURRENT_USER)
 
-				for access_mask in masks:
-					try:
-						with winreg.OpenKey(hkey, sub_key, 0, access_mask) as key:
-							install_path, _ = winreg.QueryValueEx(key, value_name)
-							if install_path:
-								p = Path(str(install_path).strip().strip('"'))
-								if p.exists():
-									return True
-					except (FileNotFoundError, OSError):
-						continue
-			except (FileNotFoundError, OSError, AttributeError, TypeError):
+
+	@classmethod
+	def _query_registry_value(cls, key_path: str, value_name: str) -> str | None:
+		"""Return the value as a string if it exists in any WOW64 view; else None."""
+		if winreg is None:
+			return None
+		hive_str, _, sub = key_path.partition("\\")
+		hive = cls._registry_hive(hive_str)
+		if hive is None or not sub:
+			return None
+
+		masks = [winreg.KEY_READ]
+		if hasattr(winreg, "KEY_WOW64_32KEY"):
+			masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+		if hasattr(winreg, "KEY_WOW64_64KEY"):
+			masks.append(winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
+
+		for mask in masks:
+			try:
+				with winreg.OpenKey(hive, sub, 0, mask) as k:
+					val, _ = winreg.QueryValueEx(k, value_name)
+					return str(val) if val else None
+			except OSError:
 				continue
-		
+		return None
+
+	def _check_registry(self) -> bool:
+		for key_path, value_name in self.registry_keys:
+			raw = self._query_registry_value(key_path, value_name)
+			if not raw:
+				continue
+			try:
+				if Path(raw.strip().strip('"')).exists():
+					return True
+			except OSError:
+				continue
 		return False
 
 	def get_detected_install_path(self) -> Path | None:
-		"""Return the detected game installation root directory if available on the current machine."""
-		if winreg is not None:
-			for key_path, value_name in self.registry_keys:
-				try:
-					hkey_str, _, sub_key = key_path.partition("\\")
-					hkey = (
-						winreg.HKEY_CLASSES_ROOT if hkey_str == "HKEY_CLASSES_ROOT"
-						else winreg.HKEY_LOCAL_MACHINE if hkey_str == "HKEY_LOCAL_MACHINE"
-						else winreg.HKEY_USERS if hkey_str == "HKEY_USERS"
-						else winreg.HKEY_CURRENT_CONFIG if hkey_str == "HKEY_CURRENT_CONFIG"
-						else winreg.HKEY_CURRENT_USER
-					)
-					masks = [winreg.KEY_READ]
-					if hasattr(winreg, "KEY_WOW64_32KEY"):
-						masks.append(winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
-					if hasattr(winreg, "KEY_WOW64_64KEY"):
-						masks.append(winreg.KEY_READ | winreg.KEY_WOW64_64KEY)
-
-					for access_mask in masks:
-						try:
-							with winreg.OpenKey(hkey, sub_key, 0, access_mask) as key:
-								val, _ = winreg.QueryValueEx(key, value_name)
-								if val:
-									p = Path(str(val).strip().strip('"'))
-									if p.is_file():
-										return p.parent
-									if p.is_dir():
-										return p
-						except (FileNotFoundError, OSError):
-							continue
-				except Exception:
-					continue
+		for key_path, value_name in self.registry_keys:
+			raw = self._query_registry_value(key_path, value_name)
+			if not raw:
+				continue
+			try:
+				p = Path(raw.strip().strip('"'))
+			except (OSError, ValueError):
+				continue
+			if p.is_file():
+				return p.parent
+			if p.is_dir():
+				return p
 		return None
 
 	def get_detected_path(self) -> str | None:
@@ -479,7 +495,9 @@ class GamePlugin(ABC):
 		"""Generate OnlineFix save path for a given Steam AppID."""
 		return f"%PUBLIC%/Documents/OnlineFix/{app_id}"
 
+
 	@staticmethod
+	@lru_cache(maxsize=1)
 	def get_steam_install_path() -> Path | None:
 		"""Return the detected Steam install directory if available on Windows."""
 		if winreg is not None:
@@ -511,6 +529,7 @@ class GamePlugin(ABC):
 		return None
 
 	@classmethod
+	@lru_cache(maxsize=1)
 	def get_steam_library_paths(cls) -> list[Path]:
 		"""Parse Steam's libraryfolders.vdf to find all Steam library root folders across all drives."""
 		steam_root = cls.get_steam_install_path()
@@ -538,6 +557,7 @@ class GamePlugin(ABC):
 		return libraries
 
 	@classmethod
+	@lru_cache(maxsize=128)
 	def get_steam_app_install_path(cls, app_id: str) -> Path | None:
 		"""Return the exact installation path of a Steam game given its AppID by checking app manifests."""
 		import re
@@ -586,6 +606,7 @@ class GamePlugin(ABC):
 		return cls.get_steam_app_install_path(app_id) is not None
 
 	@classmethod
+	@lru_cache(maxsize=128)
 	def get_gog_install_path(cls, gog_id: str) -> Path | None:
 		"""Query GOG registry to find the game installation directory."""
 		if winreg is None:
@@ -618,6 +639,7 @@ class GamePlugin(ABC):
 		return None
 
 	@classmethod
+	@lru_cache(maxsize=64)
 	def get_epic_install_path(cls, *app_names: str) -> Path | None:
 		"""Query Epic Games Launcher manifests to retrieve the installation directory."""
 		import json
@@ -647,6 +669,7 @@ class GamePlugin(ABC):
 		return None
 
 	@classmethod
+	@lru_cache(maxsize=64)
 	def get_ubisoft_install_path(cls, ubisoft_id: str) -> Path | None:
 		"""Query Ubisoft Connect registry keys for game installation directory."""
 		if winreg is None:
@@ -867,14 +890,22 @@ class GamePlugin(ABC):
 		return sources
 
 	@classmethod
-	def get_muicache_install_path(cls, exe_names: list[str]) -> Path | None:
+	def get_muicache_install_path(cls, exe_names: list[str] | tuple[str, ...]) -> Path | None:
 		"""Query Windows MuiCache registry to find where an executable was launched from.
 
 		Requires zero disk walking; instantly locates games moved via external SSD.
 		"""
+		key = tuple(sorted({n.lower().strip() for n in exe_names if n and str(n).strip()}))
+		if not key:
+			return None
+		return cls._get_muicache_install_path_cached(key)
+
+	@classmethod
+	@lru_cache(maxsize=64)
+	def _get_muicache_install_path_cached(cls, exe_set: tuple[str, ...]) -> Path | None:
 		if winreg is None:
 			return None
-		exe_set = {n.lower().strip() for n in exe_names if n.strip()}
+		names = set(exe_set)
 		subkeys = [
 			r"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache",
 			r"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\AppSwitched",
@@ -889,7 +920,7 @@ class GamePlugin(ABC):
 							idx += 1
 							clean_path = val_name.split(".FriendlyAppName")[0].split(".ApplicationCompany")[0].strip('" ')
 							p = Path(clean_path)
-							if p.name.lower() in exe_set and p.exists():
+							if p.name.lower() in names and p.exists():
 								parent = p.parent
 								if parent.name.lower() in ("win64", "binaries", "shipping", "x64"):
 									if parent.parent.name.lower() in ("binaries", "game"):
@@ -908,29 +939,57 @@ class GamePlugin(ABC):
 		folder_names: list[str],
 		exe_names: list[str] | None = None,
 		steam_app_id: str | None = None,
+		gog_id: str | None = None,
+		epic_app_names: tuple[str, ...] | None = None,
+		ubisoft_id: str | None = None,
+		unity_log: tuple[str, str] | None = None,   # (company, product) → Player.log probe
 	) -> list[Path]:
 		"""Find game installation folders without brute-force directory walking.
 
-		Uses targeted lookups:
-		1. Steam manifest check
-		2. Windows MuiCache execution history (instant for external SSDs)
-		3. Shallow top-level check on active drives (depth 1 & 2 only)
+		Uses targeted lookups (in order of cheapness):
+			1. Steam manifest (installed app manifest)
+			2. GOG registry entries
+			3. Epic manifest files
+			4. Ubisoft Connect registry
+			5. Unity Player.log install path
+			6. Windows MuiCache execution history (instant for external SSDs)
+			7. Shallow top-level check on active drives (depth 1 & 2 only)
 		"""
 		results: list[Path] = []
 		seen: set[str] = set()
 
 		def _add(p: Path | None) -> None:
-			if p and p.exists() and p.is_dir():
+			if not p:
+				return
+			try:
+				if not (p.exists() and p.is_dir()):
+					return
 				norm = str(p.resolve()).lower()
-				if norm not in seen:
-					seen.add(norm)
-					results.append(p.resolve())
+			except OSError:
+				return
+			if norm not in seen:
+				seen.add(norm)
+				results.append(p.resolve())
 
 		if steam_app_id:
 			_add(cls.get_steam_app_install_path(steam_app_id))
-
+		if gog_id:
+			_add(cls.get_gog_install_path(gog_id))
+		if epic_app_names:
+			_add(cls.get_epic_install_path(*epic_app_names))
+		if ubisoft_id:
+			_add(cls.get_ubisoft_install_path(ubisoft_id))
+		if unity_log:
+			try:
+				_add(cls.get_unity_install_path_from_log(*unity_log))
+			except Exception:
+				pass
 		if exe_names:
 			_add(cls.get_muicache_install_path(exe_names))
+
+		# Skip the O(n) drive sweep when a launcher/registry hit already exists.
+		if results:
+			return results
 
 		# Shallow check on mounted drive roots (depth 1 and 2 only)
 		drives: list[str] = ["C:/", "D:/", "E:/", "F:/", "G:/"]
@@ -1014,6 +1073,7 @@ class GamePlugin(ABC):
 
 
 	@classmethod
+	@lru_cache(maxsize=64)
 	def get_unity_install_path_from_log(cls, company: str, product: str) -> Path | None:
 		"""Inspect Unity's Player.log, Player-prev.log, or output_log.txt to extract the game install folder.
 
@@ -1348,6 +1408,27 @@ class GamePlugin(ABC):
 
 		return []
 
+def invalidate_detection_caches() -> None:
+	"""Call after Steam/GOG/Epic installs a new game, or on 'Detect Installed' button."""
+	for fn in (
+		GamePlugin.get_steam_install_path,
+		GamePlugin.get_steam_library_paths,
+		GamePlugin.get_steam_app_install_path,
+		GamePlugin.get_gog_install_path,
+		GamePlugin.get_epic_install_path,
+		GamePlugin.get_ubisoft_install_path,
+		GamePlugin._get_muicache_install_path_cached,
+		GamePlugin.get_unity_install_path_from_log,
+	):
+		clear = getattr(fn, "cache_clear", None)
+		if clear is None:
+			clear = getattr(getattr(fn, "__func__", None), "cache_clear", None)
+		if clear is not None:
+			try:
+				clear()
+			except Exception:
+				pass
+
 
 def plugin_from_json(data: dict) -> GamePlugin:
 	"""Create a simple data-driven plugin from a JSONC-like descriptor.
@@ -1414,8 +1495,11 @@ def plugin_from_json(data: dict) -> GamePlugin:
 			return self._data.get("icon", "")
 
 		@property
-		def poster(self) -> str:
-			return self._data.get("poster", "")
+		def poster(self) -> str | list[str]:
+			raw = self._data.get("poster", "")
+			if isinstance(raw, list):
+				return [str(x) for x in raw if str(x).strip()]
+			return raw if isinstance(raw, str) else (str(raw) if raw else "")
 
 		def extra_readme_lines(self) -> list[str]:
 			raw = self._data.get("readme_extra_lines")
@@ -1425,32 +1509,5 @@ def plugin_from_json(data: dict) -> GamePlugin:
 
 	return JsonGamePlugin(data)
 
-
-def auto_get_plugins() -> list[GamePlugin]:
-	"""Auto-discover and return all GamePlugin subclasses in the calling module.
-	
-	Use in plugin files instead of manually implementing get_plugins():
-	
-		# In my_game_plugin.py
-		class MyGamePlugin(GamePlugin):
-			...
-		
-		# No need for get_plugins() anymore!
-		get_plugins = auto_get_plugins
-	"""
-	frame = inspect.currentframe()
-	if frame is None or frame.f_back is None:
-		return []
-	
-	caller_module_name = frame.f_back.f_globals['__name__']
-	
-	# Find all concrete GamePlugin subclasses defined in the caller's module
-	plugins: list[GamePlugin] = [
-		cls()  # type: ignore[abstract]
-		for cls in GamePlugin.__subclasses__()
-		if cls.__module__ == caller_module_name and not inspect.isabstract(cls)
-	]
-	
-	return plugins
 
 

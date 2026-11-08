@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import (
 	SAVE_KIND_DIRECTORY,
 	SAVE_KIND_REGISTRY_WINDOWS,
@@ -56,7 +56,7 @@ class FiveHeartsUnderOneRoofPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/3021100/capsule_616x353.jpg"
+		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
 
 	def is_detected(self) -> bool:
 		"""Check if Five Hearts Under One Roof is currently installed.
@@ -89,6 +89,5 @@ class FiveHeartsUnderOneRoofPlugin(GamePlugin):
 		]
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [FiveHeartsUnderOneRoofPlugin]
 

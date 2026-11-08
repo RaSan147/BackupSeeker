@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
-_STEAM_APP_ID = "767420"
+_STEAM_APP_ID = "911400"
 _UBISOFT_ID = "5183"
 
 
@@ -64,8 +64,7 @@ class AssassinsCreed3RemasteredPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/911400/capsule_616x353.jpg"
+		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [AssassinsCreed3RemasteredPlugin]

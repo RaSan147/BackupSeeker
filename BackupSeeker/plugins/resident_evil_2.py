@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import (
 	CANDIDACY_NO_CANDIDATE_THIS_OR_IDS,
 	PROMPT_WHEN_NO_CANDIDATE,
@@ -106,7 +106,7 @@ class ResidentEvil2Plugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/883710/capsule_616x353.jpg"
+		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
 
 	def extra_readme_lines(self) -> list[str]:
 		return [
@@ -117,5 +117,4 @@ class ResidentEvil2Plugin(GamePlugin):
 		]
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [ResidentEvil2Plugin]

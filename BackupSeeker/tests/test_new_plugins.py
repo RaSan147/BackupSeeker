@@ -131,7 +131,11 @@ class TestNewPlugins(unittest.TestCase):
 				self.assertIsInstance(plugin, GamePlugin)
 				self.assertEqual(plugin.game_id, game_id)
 				self.assertTrue(len(plugin.game_name) > 0)
-				self.assertTrue(plugin.poster.startswith("http"))
+				from BackupSeeker.plugins.base import normalize_poster_sources
+
+				poster_sources = normalize_poster_sources(plugin.poster)
+				self.assertTrue(poster_sources)
+				self.assertTrue(poster_sources[0].startswith("http"))
 				self.assertTrue(len(plugin.save_sources) > 0)
 
 	def test_smart_crack_and_install_detection(self) -> None:

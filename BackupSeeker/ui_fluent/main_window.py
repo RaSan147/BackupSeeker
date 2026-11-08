@@ -5,44 +5,51 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+import traceback
 
-from PyQt6.QtCore import QByteArray, QTimer, Qt
+from PyQt6.QtCore import QByteArray, Qt, QTimer
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
-	QApplication,
-	QFileDialog,
-	QHBoxLayout,
-	QVBoxLayout,
-	QWidget,
+    QApplication,
+    QFileDialog,
+    QHBoxLayout,
+    QVBoxLayout,
+    QWidget,
+)
+from qfluentwidgets import (
+    CaptionLabel,
+    ComboBox,
+    FluentWindow,
+    InfoBar,
+    NavigationItemPosition,
+    PushButton,
+    SimpleCardWidget,
+    StrongBodyLabel,
+    SwitchButton,
+    Theme,
+    setTheme,
+)
+from qfluentwidgets import (
+    FluentIcon as FIF,
 )
 
-from qfluentwidgets import (
-	CaptionLabel,
-	ComboBox,
-	FluentWindow,
-	InfoBar,
-	NavigationItemPosition,
-	PushButton,
-	SimpleCardWidget,
-	StrongBodyLabel,
-	SwitchButton,
-	FluentIcon as FIF,
-	setTheme,
-	Theme,
-)
 from BackupSeeker import GameProfile
 
 from ..core import ConfigManager
-from ..developer_mode import apply_log_verbosity, developer_mode_status_text, is_developer_mode, set_dev_widgets_visible
+from ..developer_mode import (
+    apply_log_verbosity,
+    developer_mode_status_text,
+    is_developer_mode,
+    set_dev_widgets_visible,
+)
 from ..fluent_window import toast_parent
-from ..plugin_manager import PluginManager
 from ..plugin_hot_reload import PluginHotReloader
+from ..plugin_manager import PluginManager
 from ..ui_shared import open_path_in_explorer
-
-from .poster_refresh import PosterRefreshCoordinator
 from .library_page import ModernLibraryInterface
-from .store_page import ModernGameStoreInterface
+from .poster_refresh import PosterRefreshCoordinator
 from .profile_detail_page import ModernGameProfileInterface
+from .store_page import ModernGameStoreInterface
 
 
 class ModernBackupSeekerWindow(FluentWindow):
@@ -72,6 +79,13 @@ class ModernBackupSeekerWindow(FluentWindow):
         self._apply_theme(self.config.theme or "dark")
         self._restore_or_init_geometry()
         self._poster_refresh.kick_loads(self.config.games)
+        # One-shot background prefetch so posters start before first paint settles.
+        try:
+            self.plugin_manager.prefetch_all_missing_posters()
+        except Exception:
+            logging.getLogger("BackupSeeker.ui_fluent").debug(
+                "Initial poster prefetch failed", exc_info=True
+            )
 
     @property
     def navigation(self):
@@ -393,27 +407,70 @@ class ModernBackupSeekerWindow(FluentWindow):
         self.switchTo(target)
         self.navigationInterface.setCurrentItem(target.objectName())
 
+
+    def _safe_open_profile(self, prof, source: str) -> None:
+        try:
+            self.open_game_profile(prof, source=source)
+        except Exception as e:
+            traceback.print_exc()
+            InfoBar.error(
+                "Profile error",
+                f"{type(e).__name__}: {e}",
+                parent=toast_parent(self),
+                duration=10000,
+            )
+
+    def _safe_profiles_changed(self) -> None:
+        try:
+            self._on_profiles_changed()
+        except Exception as e:
+            traceback.print_exc()
+            InfoBar.error(
+                "Refresh error",
+                f"{type(e).__name__}: {e}",
+                parent=toast_parent(self),
+                duration=10000,
+            )
+
     def _connect_signals(self):
         """Connect signals across all pages."""
-        # Library signals
-        self.library_interface.game_profile_requested.connect(lambda prof: self.open_game_profile(prof, source="library"))
-        self.library_interface.profiles_changed.connect(self._on_profiles_changed)
+        self.library_interface.profiles_changed.connect(self._safe_profiles_changed)
         self.library_interface.navigate_to_store_requested.connect(lambda: self._show_interface("store"))
-
-        # Store signals
-        self.store_interface.game_profile_requested.connect(lambda prof: self.open_game_profile(prof, source="store"))
-        self.store_interface.profiles_changed.connect(self._on_profiles_changed)
-
-        # Profile signals
+        self.store_interface.game_profile_requested.connect(
+            lambda prof: self._safe_open_profile(prof, "store")
+        )
+        self.library_interface.game_profile_requested.connect(
+            lambda prof: self._safe_open_profile(prof, "library")
+        )
         self.profile_interface.back_requested.connect(self.back_from_game_profile)
-        self.profile_interface.profiles_changed.connect(self._on_profiles_changed)
-        self.profile_interface.backup_requested.connect(self._on_profiles_changed)
+        self.profile_interface.profiles_changed.connect(self._safe_profiles_changed)
+        self.profile_interface.backup_requested.connect(self._safe_profiles_changed)
 
     def _on_profiles_changed(self):
         """Callback invoked when profiles are added/edited/deleted."""
+        self._schedule_deferred_refresh()
+
+    def _schedule_deferred_refresh(self) -> None:
+        """Debounce library/store rebuilds across hot-reload + backup bursts."""
+        if not hasattr(self, "_refresh_timer"):
+            self._refresh_timer = QTimer(self)
+            self._refresh_timer.setSingleShot(True)
+            self._refresh_timer.setInterval(200)
+            self._refresh_timer.timeout.connect(self._do_deferred_refresh)
+        self._refresh_timer.start()
+
+    def _do_deferred_refresh(self) -> None:
+        plugin_by_id = {
+            pid: self.plugin_manager.get_plugin_for_profile(pid)
+            for pid in {p.plugin_id for p in self.config.games.values() if p.plugin_id}
+        }
+        self.library_interface.set_plugin_cache(plugin_by_id)
+        self.store_interface.set_plugin_cache(plugin_by_id)
         self.library_interface.reload()
         self.store_interface.reload()
-        self._poster_refresh.kick_loads(self.config.games)
+        # Plugins were already hydrate_all'd in reload_plugins; avoid notify(None)
+        # which would rebuild every card a second time.
+        self._poster_refresh.kick_loads(self.config.games, notify_on_hydrate=False)
 
     def _on_developer_mode_changed(self, enabled: bool) -> None:
         self.config.developer_mode = bool(enabled)
@@ -427,28 +484,6 @@ class ModernBackupSeekerWindow(FluentWindow):
             parent=toast_parent(self),
             duration=5000,
         )
-
-    def _apply_developer_mode() -> None:
-        """Sync hot reload, logging verbosity, and dev-only UI widgets."""
-        enabled = is_developer_mode(self.config)
-        apply_log_verbosity(enabled=enabled)
-        if enabled:
-            self._plugin_hot.start()
-        else:
-            self._plugin_hot.stop()
-
-        status = developer_mode_status_text(self.config)
-        if hasattr(self, "_dev_status_label"):
-            self._dev_status_label.setText(status)
-        if hasattr(self, "dev_mode_switch"):
-            self.dev_mode_switch.blockSignals(True)
-            self.dev_mode_switch.setChecked(enabled)
-            self.dev_mode_switch.blockSignals(False)
-        if hasattr(self, "_dev_action_widgets"):
-            set_dev_widgets_visible(enabled, self._dev_action_widgets)
-
-        if hasattr(self.store_interface, "reload_btn"):
-            self.store_interface.reload_btn.setVisible(enabled)
 
     def _apply_developer_mode(self) -> None:
         """Sync hot reload, logging verbosity, and dev-only UI widgets."""
@@ -477,42 +512,56 @@ class ModernBackupSeekerWindow(FluentWindow):
         scope = (scope or "all").strip().lower()
         logging.getLogger("BackupSeeker.ui_fluent").info("Developer refresh: %s", scope)
 
-        if scope in ("config", "all"):
-            try:
-                self.config.load_config()
-                self.config.update_backup_root()
-                if hasattr(self, "root_label"):
-                    self.root_label.setText(f"Current Path: {self.config.backup_root}")
-            except Exception:
-                logging.getLogger("BackupSeeker.ui_fluent").exception("Reload config failed")
-                InfoBar.error("Config reload failed", "See logs for details.", parent=toast_parent(self))
-                return
+        try:
+            if scope in ("config", "all"):
+                try:
+                    self.config.load_config()
+                    self.config.update_backup_root()
+                    if hasattr(self, "root_label"):
+                        self.root_label.setText(f"Current Path: {self.config.backup_root}")
+                except Exception:
+                    logging.getLogger("BackupSeeker.ui_fluent").exception("Reload config failed")
+                    InfoBar.error("Config reload failed", "See logs for details.", parent=toast_parent(self))
+                    return
 
-        if scope in ("plugins", "all"):
-            self._plugin_hot.reload_now(reason=f"developer:{scope}")
-            if scope == "plugins":
-                return
+            if scope in ("plugins", "all"):
+                self._plugin_hot.reload_now(reason=f"developer:{scope}")
+                if scope == "plugins":
+                    return
 
-        if scope in ("library", "store", "all"):
-            self.config.sync_plugin_versions_from(self.plugin_manager)
-            self.library_interface.reload()
-            self.store_interface.reload()
-            self._poster_refresh.kick_loads(self.config.games)
+            if scope in ("library", "store", "all"):
+                self.config.sync_plugin_versions_from(self.plugin_manager)
+                self._schedule_deferred_refresh()
 
-        InfoBar.success(
-            "Refreshed",
-            f"UI refreshed ({scope}).",
-            parent=toast_parent(self),
-            duration=3000,
-        )
+            InfoBar.success(
+                "Refreshed",
+                f"UI refreshed ({scope}).",
+                parent=toast_parent(self),
+                duration=3000,
+            )
+        except Exception as e:
+            traceback.print_exc()
+            InfoBar.error(
+                "Refresh error",
+                f"{type(e).__name__}: {e}",
+                parent=toast_parent(self),
+                duration=10000,
+            )
 
     def _on_plugins_hot_reload(self, report) -> None:
         """Refresh live UI after plugin files change on disk or manual reload."""
-        self.config.sync_plugin_versions_from(self.plugin_manager)
-        self.config.save_config()
-        self.library_interface.reload()
-        self.store_interface.reload()
-        self._poster_refresh.kick_loads(self.config.games)
+        try:
+            self.config.sync_plugin_versions_from(self.plugin_manager)
+            self.config.save_config()
+            self._schedule_deferred_refresh()
+        except Exception as e:
+            traceback.print_exc()
+            InfoBar.error(
+                "Plugin reload error",
+                f"{type(e).__name__}: {e}",
+                parent=toast_parent(self),
+                duration=10000,
+            )
 
     def _apply_theme(self, theme_name: str):
         """Apply dark/light theme."""

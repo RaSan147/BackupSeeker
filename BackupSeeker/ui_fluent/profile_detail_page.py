@@ -1174,7 +1174,7 @@ class ModernGameProfileInterface(SingleDirectionScrollArea):
 			return
 		editor = ModernGameEditor(self.current_profile, self)
 		if editor.exec():
-			updated = editor.get_profile()
+			updated = editor.profile
 			self.config.games[updated.id] = updated
 			self.config.save_config()
 			self.set_profile(updated, self.source_view)

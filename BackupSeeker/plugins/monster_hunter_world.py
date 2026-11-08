@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_REGISTRY_WINDOWS
 
 _STEAM_APP_ID = "582010"
@@ -39,8 +39,7 @@ class MonsterHunterWorldPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/582010/capsule_616x353.jpg"
+		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [MonsterHunterWorldPlugin]

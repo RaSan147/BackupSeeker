@@ -963,8 +963,6 @@ class ConfigManager:
 		try:
 			with open(tmp_path, "w", encoding="utf-8") as f:
 				json.dump(data, f, indent=2)
-				f.flush()
-				os.fsync(f.fileno())
 			tmp_path.replace(self.config_path)
 		except Exception:
 			log_and_reraise(

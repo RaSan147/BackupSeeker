@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core import PathUtils
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import (
 	PROMPT_WHEN_NO_CANDIDATE,
 	SAVE_KIND_DIRECTORY,
@@ -95,7 +95,7 @@ class AssassinsCreed2Plugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/33230/capsule_616x353.jpg"
+		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
 
 	def extra_readme_lines(self) -> list[str]:
 		return [
@@ -104,5 +104,4 @@ class AssassinsCreed2Plugin(GamePlugin):
 		]
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [AssassinsCreed2Plugin]

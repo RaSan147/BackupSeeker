@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY
 
 
@@ -46,8 +46,7 @@ class MinecraftPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://images.igdb.com/igdb/image/upload/t_screenshot_big/sc66m7.jpg"
+		return "https://cdn.jsdelivr.net/gh/mhkarimi1383/minecraft-wallpapers@main/wallpaper_minecraft_winter_celebration_1920x1080.png"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [MinecraftPlugin]

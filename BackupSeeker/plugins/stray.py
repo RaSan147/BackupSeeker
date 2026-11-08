@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
 
@@ -72,5 +72,4 @@ class StrayPlugin(GamePlugin):
 		return "https://cdn.cloudflare.steamstatic.com/steam/apps/1332010/capsule_616x353.jpg"
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [StrayPlugin]

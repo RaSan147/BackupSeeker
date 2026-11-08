@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .base import GamePlugin, auto_get_plugins
+from .base import GamePlugin
 from .save_sources import SAVE_KIND_DIRECTORY, SAVE_KIND_REGISTRY_WINDOWS
 
 _STEAM_APP_ID = "367520"
@@ -54,7 +54,7 @@ class HollowKnightPlugin(GamePlugin):
 
 	@property
 	def poster(self) -> str:
-		return "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/capsule_616x353.jpg"
+		return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{_STEAM_APP_ID}/capsule_616x353.jpg"
 
 	def is_detected(self) -> bool:
 		if self._check_registry():
@@ -71,5 +71,4 @@ class HollowKnightPlugin(GamePlugin):
 		return self.get_unity_install_path_from_log("Team Cherry", "Hollow Knight")
 
 
-def get_plugins():
-	return auto_get_plugins()
+EXPORT = [HollowKnightPlugin]

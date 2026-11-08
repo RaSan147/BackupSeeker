@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 RefreshTarget = Callable[[str | None], None]
 
-_STAGGER_MS = 400
+_STAGGER_MS = 50
 
 
 class PosterRefreshCoordinator:
@@ -27,8 +27,18 @@ class PosterRefreshCoordinator:
 		if target not in self._targets:
 			self._targets.append(target)
 
-	def kick_loads(self, games: dict[str, object]) -> None:
-		"""Hydrate cached posters immediately; only stagger network fetches for missing files."""
+	def kick_loads(
+		self,
+		games: dict[str, object],
+		*,
+		notify_on_hydrate: bool = True,
+	) -> None:
+		"""Hydrate cached posters immediately; only stagger network fetches for missing files.
+
+		Set ``notify_on_hydrate=False`` when the caller already rebuilt library/store
+		(e.g. hot-reload deferred refresh) — otherwise ``refresh_posters(None)``
+		triggers a second full card rebuild and freezes the UI.
+		"""
 
 		plugins = self._unique_plugins(games)
 		pending: list[object] = []
@@ -37,7 +47,8 @@ class PosterRefreshCoordinator:
 			if self._pm.hydrate_plugin_from_cache(plugin):
 				pending.append(plugin)
 
-		self._notify(None)
+		if notify_on_hydrate:
+			self._notify(None)
 
 		if not pending:
 			return

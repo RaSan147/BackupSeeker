@@ -156,12 +156,14 @@ class ProfilePosterService:
 		return None
 
 	def expects_download(self, profile: GameProfile) -> bool:
+		from ..plugins.base import normalize_poster_sources
+
 		plugin = resolve_plugin_for_profile(profile, self._widget)
 		if plugin is not None:
 			if getattr(plugin, "_saved_poster", ""):
 				return False
-			poster = (getattr(plugin, "poster", "") or "").strip()
-			if poster.lower().startswith(("http://", "https://")):
+			sources = normalize_poster_sources(plugin.poster)
+			if any(src.lower().startswith(("http://", "https://")) for src in sources):
 				return not getattr(plugin, "_visual_assets_loaded", False)
 
 		poster = (profile.poster or "").strip()
