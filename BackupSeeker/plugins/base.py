@@ -6,6 +6,7 @@ except Exception:  # pragma: no cover - non-Windows environments
 	winreg = None
 import inspect
 import logging
+import platform
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass

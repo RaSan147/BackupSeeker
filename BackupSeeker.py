@@ -9,6 +9,18 @@ clean interpreter instance while preserving the existing module entry.
 """
 
 import traceback
+import os
+import sys
+from pathlib import Path
+
+# Determine the app's root folder (works for both .py and frozen .exe)
+if getattr(sys, 'frozen', False):
+    app_dir = Path(sys.executable).resolve().parent
+else:
+    app_dir = Path(__file__).resolve().parent
+
+# Force the current working directory to the app folder
+os.chdir(app_dir)
 
 if __name__ == "__main__":
 	try:

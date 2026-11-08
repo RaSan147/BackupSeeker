@@ -1,11 +1,10 @@
 """Unified archive metadata from ``bundle.json`` (format version 1 only)."""
 
 from __future__ import annotations
-from typing import Tuple
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Tuple
 
 from .bundle import read_bundle_from_zip
 from .constants import BUNDLE_FORMAT_VERSION

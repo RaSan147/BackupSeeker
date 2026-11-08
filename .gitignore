@@ -224,3 +224,7 @@ __marimo__/
 
 # Ignore local app data/cache
 /BackupSeeker/data/
+
+
+*.tmp
+*.tmp.*
