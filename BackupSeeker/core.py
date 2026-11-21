@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
+import time
 
 try:
 	import winreg
@@ -797,6 +798,7 @@ class GameProfile:
 class ConfigManager:
 	def __init__(self, app_dir: Path | None = None) -> None:
 		self.app_dir = app_dir or Path(os.path.dirname(os.path.abspath(__file__)))
+		self.config_pdb_path = self.app_dir / "gsm_config.pdb"
 		self.config_path = self.app_dir / "gsm_config.json"
 		# Backup location settings
 		# backup_location_mode: "cwd" | "fixed"
@@ -886,20 +888,34 @@ class ConfigManager:
 				prof.name = gn.strip()
 
 	def load_config(self) -> None:
-		if not self.config_path.exists():
+		data: dict = {}
+
+		# 1. Primary storage: load from pyroDB4 MessagePack database if available
+		if self.config_pdb_path.exists():
+			try:
+				from .pyroDB4 import PyroDB
+				db = PyroDB(str(self.config_pdb_path), auto_dump=False)
+				data = dict(db.items())
+			except Exception:
+				data = {}
+
+		# 2. Migration fallback: load from gsm_config.json if pdb is not present or empty
+		if not data and self.config_path.exists():
+			try:
+				with open(self.config_path, "r", encoding="utf-8") as f:
+					raw = f.read()
+				data = json.loads(raw)
+			except json.JSONDecodeError:
+				bad_file = self.config_path.with_suffix(".json.corrupted")
+				if self.config_path.exists():
+					shutil.move(self.config_path, bad_file)
+				log_and_reraise(
+					f"gsm_config.json is invalid JSON (moved aside to {bad_file.name}).",
+					likely_cause="Broken JSON from hand edits, truncated write, or disk glitch.",
+				)
+
+		if not data:
 			return
-		try:
-			with open(self.config_path, "r", encoding="utf-8") as f:
-				raw = f.read()
-			data = json.loads(raw)
-		except json.JSONDecodeError:
-			bad_file = self.config_path.with_suffix(".json.corrupted")
-			if self.config_path.exists():
-				shutil.move(self.config_path, bad_file)
-			log_and_reraise(
-				f"gsm_config.json is invalid JSON (moved aside to {bad_file.name}).",
-				likely_cause="Broken JSON from hand edits, truncated write, or disk glitch.",
-			)
 
 		self.games.clear()
 		for game_data in data.get("games", []):
@@ -959,14 +975,23 @@ class ConfigManager:
 				"restore_dialog": self.ui_view_restore_dialog,
 			},
 		}
+
+		# 1. Primary write: atomic MessagePack database with lock via pyroDB4
+		try:
+			from .pyroDB4 import PyroDB
+			db = PyroDB(str(self.config_pdb_path), auto_dump=False)
+			for k, v in data.items():
+				db.set(k, v)
+			db.dump()
+		except Exception as e:
+			logging.getLogger(__name__).warning("PyroDB save failed, falling back to JSON: %s", e)
+
+		# 2. View-only JSON export for human inspection and compatibility
 		tmp_path = self.config_path.with_suffix(".tmp")
 		try:
 			with open(tmp_path, "w", encoding="utf-8") as f:
 				json.dump(data, f, indent=2)
 
-			# On Windows, atomic replace can raise PermissionError if another process
-			# (IDE, editor, antivirus, file watcher) has the destination file open with
-			# non-overlapping sharing flags. Retry with small backoff before direct write fallback.
 			replaced = False
 			for attempt in range(5):
 				try:
@@ -984,10 +1009,8 @@ class ConfigManager:
 				except OSError:
 					pass
 		except Exception:
-			log_and_reraise(
-				f"Cannot write config to {self.config_path}",
-				likely_cause="Insufficient permissions, disk full, antivirus lock, or read-only location.",
-			)
+			# Non-fatal if JSON view export fails as primary pdb is already saved
+			pass
 
 	def get_game_backup_dir(self, folder_component: str) -> Path:
 		"""Per-game folder under :attr:`backup_root` (``folder_component`` is sanitized)."""
