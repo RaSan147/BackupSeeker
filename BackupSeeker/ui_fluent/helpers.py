@@ -179,6 +179,8 @@ def last_backup_label(
 
 	plug = resolve_plugin_for_profile(profile, widget)
 	bdir = config.backup_dir_for_profile(profile, plug)
+	if not bdir.is_dir():
+		return f"{prefix}Never"
 	files = list(bdir.glob("*.zip"))
 	if not files:
 		return f"{prefix}Never"

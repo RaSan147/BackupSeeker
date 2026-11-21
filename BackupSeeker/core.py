@@ -1040,20 +1040,22 @@ class ConfigManager:
 			pass
 
 	def get_game_backup_dir(self, folder_component: str) -> Path:
-		"""Per-game folder under :attr:`backup_root` (``folder_component`` is sanitized)."""
+		"""Per-game folder under :attr:`backup_root` (``folder_component`` is sanitized).
+
+		Does not create the directory; callers that write backups must mkdir.
+		"""
 
 		safe = sanitize_backup_filename_component(folder_component)
-		d = self.backup_root / safe
-		d.mkdir(parents=True, exist_ok=True)
-		return d
+		return self.backup_root / safe
 
 	def get_safety_backup_dir(self, folder_component: str) -> Path:
-		"""``Safety`` subfolder for pre-restore ZIPs (``folder_component`` is sanitized)."""
+		"""``Safety`` subfolder for pre-restore ZIPs (``folder_component`` is sanitized).
+
+		Does not create the directory; callers that write backups must mkdir.
+		"""
 
 		safe = sanitize_backup_filename_component(folder_component)
-		d = self.backup_root / safe / "Safety"
-		d.mkdir(parents=True, exist_ok=True)
-		return d
+		return self.backup_root / safe / "Safety"
 
 	def backup_dir_for_profile(self, profile: GameProfile, plugin: object | None) -> Path:
 		"""Same directory ``run_backup`` writes into for this profile + plugin resolution."""
@@ -1362,6 +1364,9 @@ def run_backup(
 	)
 
 	pc_text, pl_text = read_portable_embed_sources()
+
+	dest_zip = Path(dest_zip)
+	dest_zip.parent.mkdir(parents=True, exist_ok=True)
 
 	with zipfile.ZipFile(dest_zip, "w", compression) as zf:
 		zf.writestr(BACKUP_BUNDLE_PATH, json.dumps(bundle_body, indent=2))
