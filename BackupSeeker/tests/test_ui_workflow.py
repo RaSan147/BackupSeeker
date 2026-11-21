@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from BackupSeeker.core import GameProfile
 from BackupSeeker.ui_fluent import ModernBackupSeekerWindow

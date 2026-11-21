@@ -683,7 +683,7 @@ class PluginManager:
 		"""Run ``fn`` on the Qt GUI thread (required before touching widgets)."""
 
 		try:
-			from PyQt6.QtCore import QCoreApplication, QThread, QTimer
+			from PySide6.QtCore import QCoreApplication, QThread, QTimer
 
 			app = QCoreApplication.instance()
 			if app is not None and QThread.currentThread() is app.thread():

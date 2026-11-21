@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtWidgets import (
 	QAbstractItemView,
 	QDialog,
 	QHBoxLayout,
@@ -56,7 +56,7 @@ from .styles import AdaptiveThemeStyles, LIST_STYLE_TRANSPARENT, get_theme_style
 
 class ModernProfilesInterface(QWidget):
     """Profile management interface for add, edit, delete, and search operations."""
-    profiles_changed = pyqtSignal()
+    profiles_changed = Signal()
 
     _CARD_POSTER_SIZE = QSize(240, 135)
     _CARD_GRID_SIZE = QSize(280, 236)

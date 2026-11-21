@@ -4,9 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
 	QAbstractItemView,
 	QFileDialog,
 	QFrame,
@@ -87,9 +87,9 @@ class ModernGameProfileInterface(SingleDirectionScrollArea):
 	Save Locations Verification, and Single-Game Backup History.
 	"""
 
-	back_requested = pyqtSignal()
-	profiles_changed = pyqtSignal()
-	backup_requested = pyqtSignal()
+	back_requested = Signal()
+	profiles_changed = Signal()
+	backup_requested = Signal()
 
 	_HERO_POSTER_SIZE = QSize(240, 135)
 

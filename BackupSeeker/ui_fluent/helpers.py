@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Any
 
 import time
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt
-from PyQt6.QtWidgets import QAbstractItemView, QAbstractScrollArea, QWidget
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtWidgets import QAbstractItemView, QAbstractScrollArea, QWidget
 from qfluentwidgets import ComboBox, SingleDirectionScrollArea, TableWidget
 from qfluentwidgets.common.smooth_scroll import SmoothScroll
 from qfluentwidgets.components.widgets.scroll_bar import SmoothScrollDelegate, SmoothScrollBar

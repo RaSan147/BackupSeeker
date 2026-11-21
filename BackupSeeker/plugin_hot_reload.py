@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QFileSystemWatcher, QObject, QTimer, pyqtSignal
+from PySide6.QtCore import QFileSystemWatcher, QObject, QTimer, Signal
 
 if TYPE_CHECKING:
 	from .plugin_manager import PluginManager
@@ -20,7 +20,7 @@ _WATCH_NAMES = {"games.jsonc", "plugin_index.json"}
 class PluginHotReloader(QObject):
 	"""Watch ``plugins/`` and debounce hot reloads into :class:`PluginManager`."""
 
-	reload_finished = pyqtSignal(object)
+	reload_finished = Signal(object)
 
 	def __init__(self, manager: PluginManager, *, debounce_ms: int = 750) -> None:
 		super().__init__()

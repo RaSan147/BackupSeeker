@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QFont, QFontMetrics, QPainter, QPixmap
-from PyQt6.QtWidgets import QLabel, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPixmap
+from PySide6.QtWidgets import QLabel, QWidget
 
 from ..core import GameProfile
 from ..fluent_window import plugin_manager_from_widget, resolve_plugin_for_profile

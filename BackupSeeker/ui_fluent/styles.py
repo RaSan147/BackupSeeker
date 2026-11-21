@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor
 from qfluentwidgets import TableWidget, setCustomStyleSheet
 from qfluentwidgets.components.widgets.list_view import ListItemDelegate
 

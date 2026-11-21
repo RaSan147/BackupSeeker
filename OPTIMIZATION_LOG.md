@@ -145,7 +145,7 @@ Project docs were aligned with the current codebase:
 
 - **Fluent UI** is documented as the `BackupSeeker/ui_fluent/` package (`app_runner`, `main_window`, pages) with **`BackupSeeker/modern_widgets.py`** as shared Fluent components; **`BackupSeeker/main.py`** launches Fluent only (legacy `ui.py` removed).
 - **Plugins** are documented around declarative **`save_sources`** (`BackupSeeker/plugins/save_sources.py`) and **`TEMPLATE_PLUGIN.py`**; JSONC follows **`games.template.jsonc`**.
-- **Dependencies**: root **`requirements.txt`** pins PyQt6, PyQt6-Fluent-Widgets, frameless window, and `requests`.
+- **Dependencies**: root **`requirements.txt`** pins PySide6, PySide6-Fluent-Widgets, frameless window, and `requests`.
 - **Scripts**: **`scripts/upgrade_backup_zips.ps1`** calls `BackupSeeker.archive.upgrade_zip` for refreshing contents of existing backup ZIPs.
 
 Canonical index: **`Docs/README.md`**; overview: **`README.md`** at repository root.

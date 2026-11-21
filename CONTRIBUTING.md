@@ -55,7 +55,7 @@ Run the app:
 ```pwsh
 python -m BackupSeeker.main
 ```
-This installs PyQt6, PyQt6-Fluent-Widgets, frameless-window support, and `requests` (plugin asset downloads) as pinned in `requirements.txt`.
+This installs PySide6, PySide6-Fluent-Widgets, frameless-window support, and `requests` (plugin asset downloads) as pinned in `requirements.txt`.
 
 6. Coding Standards
 -------------------

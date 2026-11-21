@@ -1,4 +1,4 @@
-"""Fluent UI (PyQt6-Fluent-Widgets). Implementation lives in submodules."""
+"""Fluent UI (PySide6-Fluent-Widgets). Implementation lives in submodules."""
 
 from .fluent_impl import ModernBackupSeekerWindow, run_modern_fluent_app
 

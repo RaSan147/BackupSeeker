@@ -3,8 +3,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
 from qfluentwidgets import FluentTranslator, Theme, setTheme
 
 from ..core import ConfigManager
@@ -53,7 +53,7 @@ def run_modern_fluent_app() -> int:
 		msg = f"A fatal error occurred in the Fluent UI:\n{e}\n\nWould you like to restart the application?"
 		confirmed = False
 		try:
-			from PyQt6.QtWidgets import QMessageBox as _QMB
+			from PySide6.QtWidgets import QMessageBox as _QMB
 
 			ans = _QMB.question(
 				None,

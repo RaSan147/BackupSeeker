@@ -9,9 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QIcon, QGuiApplication, QPainter
-from PyQt6.QtWidgets import (QApplication, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
+from PySide6.QtCore import Qt, QTimer, Signal, QSize
+from PySide6.QtGui import QIcon, QGuiApplication, QPainter
+from PySide6.QtWidgets import (QApplication, QVBoxLayout, QHBoxLayout, QWidget, QLabel,
                              QListWidgetItem, QTableWidgetItem, QHeaderView, QAbstractItemView,
                              QFileDialog, QDialog, QPushButton, QFrame, QStyle, QStyleOption)
 

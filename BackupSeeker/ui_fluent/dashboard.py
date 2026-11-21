@@ -7,9 +7,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
 	QAbstractItemView,
 	QHeaderView,
 	QHBoxLayout,
@@ -67,9 +67,9 @@ class ModernDashboardInterface(QWidget):
     _COVER_ART_MAX_W = 320
     _COVER_ART_MAX_H = 200
 
-    backup_requested = pyqtSignal()
-    restore_requested = pyqtSignal()
-    profiles_changed = pyqtSignal()
+    backup_requested = Signal()
+    restore_requested = Signal()
+    profiles_changed = Signal()
     
     def __init__(
         self,

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QBrush, QColor
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QBrush, QColor
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
@@ -43,7 +43,7 @@ from .styles import AdaptiveThemeStyles, get_theme_styles
 
 class ModernPluginsInterface(QWidget):
     """Plugin management interface for detection, installation, and configuration."""
-    profiles_changed = pyqtSignal()
+    profiles_changed = Signal()
     
     def __init__(self, config: ConfigManager, plugin_manager: PluginManager, parent=None):
         super().__init__(parent)

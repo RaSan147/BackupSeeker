@@ -91,8 +91,8 @@ def _plugin_input_dialog_stylesheet() -> str:
 def _hint_example_font(src):
 	"""Italic, slightly smaller 'e.g.' line. Resolves stylesheet fonts with pointSize -1 (avoids Qt warnings)."""
 
-	from PyQt6.QtGui import QFont
-	from PyQt6.QtWidgets import QApplication
+	from PySide6.QtGui import QFont
+	from PySide6.QtWidgets import QApplication
 
 	f = QFont(src)
 	if f.pointSize() <= 0 and f.pixelSize() <= 0:
@@ -140,7 +140,7 @@ def open_path_in_explorer(target: Path | str) -> None:
 
 def confirm_action(parent, title: str, message: str) -> bool:
     """Show a confirmation prompt."""
-    from PyQt6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     res = QMessageBox.question(
         parent,
@@ -286,8 +286,8 @@ def prompt_plugin_input(
 ) -> str | None:
 	"""Plugin modal: detail, optional ``e.g.``, label over full-width field, OK/Cancel. ``with_browse=False`` = text only."""
 
-	from PyQt6.QtCore import Qt
-	from PyQt6.QtWidgets import (
+	from PySide6.QtCore import Qt
+	from PySide6.QtWidgets import (
 		QDialog,
 		QDialogButtonBox,
 		QFileDialog,
@@ -472,7 +472,7 @@ def offer_plugin_restore_input_review(
 	Uses :meth:`GamePlugin.restore_input_specs_for_review`. Returns False if the user cancels.
 	"""
 
-	from PyQt6.QtWidgets import QMessageBox
+	from PySide6.QtWidgets import QMessageBox
 
 	from .plugin_runtime import as_game_plugin
 

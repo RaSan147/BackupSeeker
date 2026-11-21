@@ -7,9 +7,9 @@ from datetime import datetime
 from pathlib import Path
 import traceback
 
-from PyQt6.QtCore import QByteArray, Qt, QTimer
-from PyQt6.QtGui import QGuiApplication
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QByteArray, Qt, QTimer
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,

@@ -9,9 +9,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QLabel
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QLabel
 
 from .profile_visuals import load_pixmap, scale_poster
 

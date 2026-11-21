@@ -7,8 +7,8 @@ from typing import Any
 from datetime import datetime
 from pathlib import Path
 
-from PyQt6.QtCore import QEvent, QSize, Qt
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtWidgets import (
 	QAbstractItemView,
 	QApplication,
 	QHBoxLayout,

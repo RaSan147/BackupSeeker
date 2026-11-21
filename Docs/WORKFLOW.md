@@ -29,7 +29,7 @@ python -m pip install -r requirements.txt
 python -m BackupSeeker.main
 ```
 
-PyQt6, PyQt6-Fluent-Widgets, frameless-window helpers, and `requests` are already listed in `requirements.txt`. Re-run `pip install -r requirements.txt` after it changes.
+PySide6, PySide6-Fluent-Widgets, frameless-window helpers, and `requests` are already listed in `requirements.txt`. Re-run `pip install -r requirements.txt` after it changes.
 
 Direct Fluent package entry (same Fluent path as `BackupSeeker.main` when Fluent loads successfully):
 

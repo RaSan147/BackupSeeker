@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QPainter
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QSize, QTimer, Qt, Signal
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import (
 	QAbstractItemView,
 	QFrame,
 	QHBoxLayout,
@@ -58,9 +58,9 @@ from .styles import apply_list_transparent_style, get_theme_styles
 class StoreCardWidget(RoundedCard):
 	"""Store card with poster, detection badge, and Add/Remove."""
 
-	clicked = pyqtSignal()
-	profile_requested = pyqtSignal()
-	toggle_library_requested = pyqtSignal()
+	clicked = Signal()
+	profile_requested = Signal()
+	toggle_library_requested = Signal()
 
 	_CARD_POSTER_SIZE = QSize(240, 135)
 
@@ -270,8 +270,8 @@ class ModernGameStoreInterface(QWidget):
 	and adding games to the user's Library.
 	"""
 
-	game_profile_requested = pyqtSignal(object)  # GameProfile
-	profiles_changed = pyqtSignal()
+	game_profile_requested = Signal(object)  # GameProfile
+	profiles_changed = Signal()
 
 	_CARD_GRID_SIZE = QSize(275, 290)
 	# LCM(3, 4, 5) so pages fill evenly at common grid column counts.

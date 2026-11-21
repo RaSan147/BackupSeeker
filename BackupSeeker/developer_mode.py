@@ -6,7 +6,7 @@ import logging
 import os
 from collections.abc import Iterable
 
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget
 
 logger = logging.getLogger(__name__)
 

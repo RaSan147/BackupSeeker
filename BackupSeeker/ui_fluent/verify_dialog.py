@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QGuiApplication
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QFont, QGuiApplication
+from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFrame,

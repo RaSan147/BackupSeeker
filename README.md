@@ -1,7 +1,7 @@
 **BackupSeeker - Game Save Manager**
 ===================================
 
-BackupSeeker is a lightweight, modular manager for creating, restoring, and safely archiving PC game save data. It combines a small testable core with a PyQt6 desktop UI and a flexible plugin system for game detection.
+BackupSeeker is a lightweight, modular manager for creating, restoring, and safely archiving PC game save data. It combines a small testable core with a PySide6 desktop UI and a flexible plugin system for game detection.
 
 **Table of contents**
 - **Overview**
@@ -33,7 +33,7 @@ BackupSeeker creates timestamped ZIP archives of game save folders and provides 
 **Architecture (key files)**
 - `BackupSeeker/core.py` - core logic, `GameProfile`, backup/restore orchestration.
 - `BackupSeeker/main.py` - entry → Fluent UI (`run_modern_fluent_app`).
-- `BackupSeeker/ui_fluent/` - Fluent UI (PyQt6-Fluent-Widgets): `app_runner.py` (`run_modern_fluent_app`), `main_window.py`, dashboard/plugins/profiles/backups pages, `fluent_impl.py` re-exports.
+- `BackupSeeker/ui_fluent/` - Fluent UI (PySide6-Fluent-Widgets): `app_runner.py` (`run_modern_fluent_app`), `main_window.py`, dashboard/plugins/profiles/backups pages, `fluent_impl.py` re-exports.
 - `BackupSeeker/modern_widgets.py` - shared Fluent cards, navigation helpers, dialogs.
 - `BackupSeeker/plugin_manager.py` - plugin discovery and asset download (icons/posters).
 - `BackupSeeker/plugins/base.py` - `GamePlugin` API; `plugins/save_sources.py` - `save_sources` schema.
@@ -58,7 +58,7 @@ Index: [Docs/README.md](Docs/README.md).
 Requirements:
 - Python 3.11+ (tested with 3.13).
 
-Install dependencies (recommended inside a virtual environment). `requirements.txt` includes PyQt6, PyQt6-Fluent-Widgets, frameless window support, and `requests` (plugin assets).
+Install dependencies (recommended inside a virtual environment). `requirements.txt` includes PySide6, PySide6-Fluent-Widgets, frameless window support, and `requests` (plugin assets).
 
 ```pwsh
 python -m venv .venv

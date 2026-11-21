@@ -10,7 +10,7 @@ PC gamers lose progress when saves are corrupted, overwritten, or lost during re
 2. **Safe restore** - Before overwriting live saves, create a Safety archive of the current state when possible.
 3. **Portability** - Store paths using environment-variable tokens (for example `%USERPROFILE%`) so profiles survive machine moves.
 4. **Extensibility** - Discover games via Python plugins and JSONC descriptors; optional lifecycle hooks for custom backup/restore behavior.
-5. **Usability** - PyQt6 desktop UI (Fluent UI by default when dependencies are available), theme and window layout persistence.
+5. **Usability** - PySide6 desktop UI (Fluent UI by default when dependencies are available), theme and window layout persistence.
 
 ## Target users
 

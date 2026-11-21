@@ -25,8 +25,8 @@ except Exception:
 
 try:
     # PyQt imports
-    from PyQt6.QtGui import QPalette
-    from PyQt6.QtWidgets import QApplication
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QApplication
 except Exception:
     QApplication = None
     QPalette = None
