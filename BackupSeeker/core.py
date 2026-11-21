@@ -48,6 +48,7 @@ from .archive.constants import (
 	RESTORE_CLI_PATH,
 	ZIP_README_PATH,
 )
+from .pyroDB4 import PyroDB
 from .archive.metadata import (  # noqa: F401
 	cached_archive_metadata,
 	read_archive_metadata,
@@ -799,7 +800,8 @@ class ConfigManager:
 	def __init__(self, app_dir: Path | None = None) -> None:
 		self.app_dir = app_dir or Path(os.path.dirname(os.path.abspath(__file__)))
 		self.config_pdb_path = self.app_dir / "gsm_config.pdb"
-		self.config_path = self.app_dir / "gsm_config.json"
+		# User view-only JSON export for inspection
+		self.config_view_json_path = self.app_dir / "gsm_config.json"
 		# Backup location settings
 		# backup_location_mode: "cwd" | "fixed"
 		# backup_fixed_path: user-chosen absolute path when mode == "fixed"
@@ -824,6 +826,11 @@ class ConfigManager:
 		# Re-evaluate backup root after loading config settings.
 		self.update_backup_root()
 		self.backup_root.mkdir(parents=True, exist_ok=True)
+
+	@property
+	def config_path(self) -> Path:
+		"""Property for backward compatibility pointing to the viewable JSON export."""
+		return self.config_view_json_path
 
 	def update_backup_root(self) -> None:
 		"""Update backup_root based on current mode/path settings."""
@@ -890,29 +897,23 @@ class ConfigManager:
 	def load_config(self) -> None:
 		data: dict = {}
 
-		# 1. Primary storage: load from pyroDB4 MessagePack database if available
-		if self.config_pdb_path.exists():
+		# One-time migration: if pdb does not exist yet but old json exists, seed from json
+		if not self.config_pdb_path.exists() and self.config_view_json_path.exists():
 			try:
-				from .pyroDB4 import PyroDB
-				db = PyroDB(str(self.config_pdb_path), auto_dump=False)
-				data = dict(db.items())
+				with open(self.config_view_json_path, "r", encoding="utf-8") as f:
+					data = json.loads(f.read())
+				if data:
+					db = PyroDB(str(self.config_pdb_path), auto_dump=False)
+					for k, v in data.items():
+						db.set(k, v)
+					db.dump()
 			except Exception:
 				data = {}
 
-		# 2. Migration fallback: load from gsm_config.json if pdb is not present or empty
-		if not data and self.config_path.exists():
-			try:
-				with open(self.config_path, "r", encoding="utf-8") as f:
-					raw = f.read()
-				data = json.loads(raw)
-			except json.JSONDecodeError:
-				bad_file = self.config_path.with_suffix(".json.corrupted")
-				if self.config_path.exists():
-					shutil.move(self.config_path, bad_file)
-				log_and_reraise(
-					f"gsm_config.json is invalid JSON (moved aside to {bad_file.name}).",
-					likely_cause="Broken JSON from hand edits, truncated write, or disk glitch.",
-				)
+		# Single primary source: pyroDB4 database
+		if self.config_pdb_path.exists():
+			db = PyroDB(str(self.config_pdb_path), auto_dump=False)
+			data = dict(db.items())
 
 		if not data:
 			return
@@ -976,40 +977,35 @@ class ConfigManager:
 			},
 		}
 
-		# 1. Primary write: atomic MessagePack database with lock via pyroDB4
-		try:
-			from .pyroDB4 import PyroDB
-			db = PyroDB(str(self.config_pdb_path), auto_dump=False)
-			for k, v in data.items():
-				db.set(k, v)
-			db.dump()
-		except Exception as e:
-			logging.getLogger(__name__).warning("PyroDB save failed, falling back to JSON: %s", e)
+		# Direct storage: atomic MessagePack database with file lock via pyroDB4
+		db = PyroDB(str(self.config_pdb_path), auto_dump=False)
+		for k, v in data.items():
+			db.set(k, v)
+		db.dump()
 
-		# 2. View-only JSON export for human inspection and compatibility
-		tmp_path = self.config_path.with_suffix(".tmp")
+		# View-only JSON export for inspection
 		try:
+			tmp_path = self.config_view_json_path.with_suffix(".tmp")
 			with open(tmp_path, "w", encoding="utf-8") as f:
 				json.dump(data, f, indent=2)
 
 			replaced = False
-			for attempt in range(5):
+			for attempt in range(3):
 				try:
-					tmp_path.replace(self.config_path)
+					tmp_path.replace(self.config_view_json_path)
 					replaced = True
 					break
 				except PermissionError:
-					time.sleep(0.05 * (attempt + 1))
+					time.sleep(0.05)
 
 			if not replaced:
 				import shutil
-				shutil.copyfile(str(tmp_path), str(self.config_path))
+				shutil.copyfile(str(tmp_path), str(self.config_view_json_path))
 				try:
 					tmp_path.unlink(missing_ok=True)
 				except OSError:
 					pass
 		except Exception:
-			# Non-fatal if JSON view export fails as primary pdb is already saved
 			pass
 
 	def get_game_backup_dir(self, folder_component: str) -> Path:
