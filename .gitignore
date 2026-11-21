@@ -217,7 +217,7 @@ __marimo__/
 /OLD ZIPS/
 /*.ignore
 /BackupSeeker/gsm_config.json
-/BackupSeeker/gsm_config.pdb*
+
 
 # Ignore all folders starting with backups (e.g. backups, backups - Copy)
 /backups*/
@@ -229,3 +229,6 @@ __marimo__/
 
 *.tmp
 *.tmp.*
+*.pdb
+*.pdb.wal
+*.lock

@@ -39,7 +39,6 @@ class SAOAlicizationLycorisPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/BANDAI NAMCO Entertainment/SAOAL/Saved/SaveGames",
-					"%LOCALAPPDATA%/BANDAI NAMCO Entertainment/SAOAL/Saved",
 				],
 			},
 		]

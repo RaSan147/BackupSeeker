@@ -35,7 +35,6 @@ from qfluentwidgets import (
 from ..core import (
     ConfigManager,
     GameProfile,
-    PathUtils,
     verify_save_locations_report,
 )
 from ..fluent_window import resolve_plugin_for_profile, toast_parent

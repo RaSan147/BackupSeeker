@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, QTimer, Qt, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (
 	QAbstractItemView,
@@ -41,18 +41,18 @@ from ..developer_mode import is_developer_mode
 from ..fluent_window import toast_parent
 from ..modern_widgets import RoundedCard
 from ..plugin_manager import PluginManager
+from ..ui_helpers import is_app_dark
 from .card_viewport import apply_cached_poster, page_bounds
 from .helpers import (
 	_install_read_only_table,
 )
 from .poster_refresh import PosterRefreshCoordinator
-from .shimmer import ShimmerSkeleton
 from .profile_visuals import (
 	POSTER_LABEL_NAME,
 	ProfilePosterService,
 	elide_multiline_text,
 )
-from ..ui_helpers import is_app_dark
+from .shimmer import ShimmerSkeleton
 from .styles import apply_list_transparent_style, get_theme_styles
 
 
@@ -224,7 +224,101 @@ class StoreCardWidget(RoundedCard):
 		layout.addLayout(btn_row)
 		layout.addStretch()
 
+		self._btn_row = btn_row
+		self._status_row_layout = status_row
+		self._status_row_widgets: list[QWidget] = []
+		# collect badge widgets for in-place swap
+		for i in range(status_row.count()):
+			item = status_row.itemAt(i)
+			if item and item.widget():
+				self._status_row_widgets.append(item.widget())
+
 		self._load_poster()
+
+	def update_library_state(self, in_library: bool) -> None:
+		"""Swap button and library badge in-place without rebuilding the card."""
+		self.in_library = in_library
+
+		# Swap add_btn type/text/icon
+		old_btn = self.add_btn
+		if in_library:
+			new_btn = PushButton(FIF.DELETE, "Remove", self)
+		else:
+			new_btn = PrimaryPushButton(FIF.ADD, "Add", self)
+		new_btn.setFixedHeight(30)
+		new_btn.clicked.connect(self.toggle_library_requested.emit)
+		idx = self._btn_row.indexOf(old_btn)
+		self._btn_row.removeWidget(old_btn)
+		old_btn.deleteLater()
+		self._btn_row.insertWidget(idx, new_btn)
+		self.add_btn = new_btn
+
+		# Remove old lib badge (last widget before stretch) and re-add if needed
+		# Easiest: remove all badge widgets and re-add from scratch
+		is_dark = is_app_dark()
+		for w in self._status_row_widgets:
+			self._status_row_layout.removeWidget(w)
+			w.deleteLater()
+		self._status_row_widgets.clear()
+
+		if self.is_detected:
+			det_badge = CaptionLabel("Installed", self)
+			det_bg = "#143322" if is_dark else "#dcfce7"
+			det_color = "#4ade80" if is_dark else "#15803d"
+			det_border = "#1e5938" if is_dark else "#bbf7d0"
+			det_badge.setStyleSheet(
+				f"CaptionLabel {{"
+				f"  background-color: {det_bg};"
+				f"  color: {det_color};"
+				f"  border: 1px solid {det_border};"
+				f"  border-radius: 9999px;"
+				f"  padding: 2px 10px;"
+				f"  font-weight: bold;"
+				f"  font-size: 11px;"
+				f"}}"
+			)
+			self._status_row_layout.insertWidget(0, det_badge)
+			self._status_row_widgets.append(det_badge)
+		else:
+			sup_badge = CaptionLabel("Supported", self)
+			sup_bg = "#26293b" if is_dark else "#eef0f8"
+			sup_color = "#a0a6b8" if is_dark else "#4f5466"
+			sup_border = "#363a52" if is_dark else "#d8dce8"
+			sup_badge.setStyleSheet(
+				f"CaptionLabel {{"
+				f"  background-color: {sup_bg};"
+				f"  color: {sup_color};"
+				f"  border: 1px solid {sup_border};"
+				f"  border-radius: 9999px;"
+				f"  padding: 2px 10px;"
+				f"  font-size: 11px;"
+				f"}}"
+			)
+			self._status_row_layout.insertWidget(0, sup_badge)
+			self._status_row_widgets.append(sup_badge)
+
+		if in_library:
+			lib_badge = CaptionLabel("In Library", self)
+			lib_bg = "#1e2442" if is_dark else "#e0e7ff"
+			lib_color = "#5b6cf9" if is_dark else "#4338ca"
+			lib_border = "#2f3a6e" if is_dark else "#c7d2fe"
+			lib_badge.setStyleSheet(
+				f"CaptionLabel {{"
+				f"  background-color: {lib_bg};"
+				f"  color: {lib_color};"
+				f"  border: 1px solid {lib_border};"
+				f"  border-radius: 9999px;"
+				f"  padding: 2px 10px;"
+				f"  font-weight: bold;"
+				f"  font-size: 11px;"
+				f"}}"
+			)
+			# insert before the stretch (last item)
+			self._status_row_layout.insertWidget(len(self._status_row_widgets), lib_badge)
+			self._status_row_widgets.append(lib_badge)
+
+		for w in self._status_row_widgets:
+			w.show()
 
 	def paintEvent(self, event):
 		opt = QStyleOption()
@@ -247,11 +341,10 @@ class StoreCardWidget(RoundedCard):
 		self._load_token += 1
 		token = self._load_token
 		saved = getattr(self.plugin, "_saved_poster", "")
-		if saved and Path(saved).is_file():
-			if apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE):
-				self.shimmer.hide()
-				self.poster_label.show()
-				return
+		if saved and Path(saved).is_file() and apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE):
+			self.shimmer.hide()
+			self.poster_label.show()
+			return
 
 		pm = self._posters.plugin_manager()
 		if pm is not None:
@@ -645,7 +738,7 @@ class ModernGameStoreInterface(QWidget):
 			if target_id and target_id in self.config.games:
 				del self.config.games[target_id]
 				self.config.save_config()
-				self._load_store()
+				self._update_card_library_state(plugin, in_library=False)
 				self.profiles_changed.emit()
 				InfoBar.success(
 					title="Removed from Library",
@@ -663,7 +756,7 @@ class ModernGameStoreInterface(QWidget):
 			)
 			self.config.games[gid] = new_prof
 			self.config.save_config()
-			self._load_store()
+			self._update_card_library_state(plugin, in_library=True)
 			self.profiles_changed.emit()
 			InfoBar.success(
 				title="Added to Library",
@@ -672,6 +765,30 @@ class ModernGameStoreInterface(QWidget):
 				position=InfoBarPosition.TOP,
 				duration=2500,
 			)
+
+	def _update_card_library_state(self, plugin: object, in_library: bool) -> None:
+		"""Update the matching card widget in-place; fall back to full reload if not found."""
+		gid = getattr(plugin, "game_id", "")
+		for i in range(self.card_list.count()):
+			item = self.card_list.item(i)
+			widget = self.card_list.itemWidget(item)
+			if widget is None:
+				continue
+			card_gid = getattr(getattr(widget, "plugin", None), "game_id", None)
+			if card_gid == gid and hasattr(widget, "update_library_state"):
+				widget.update_library_state(in_library)
+				# Reconnect toggle signal with flipped state
+				try:
+					widget.toggle_library_requested.disconnect()
+				except RuntimeError:
+					pass
+				widget.toggle_library_requested.connect(
+					lambda p=plugin, lib=in_library: self._toggle_plugin_in_library(p, lib)
+				)
+				self._filtered = self._collect_filtered()
+				return
+		# Card not visible (table view or different page) — full reload
+		self._load_store()
 
 	def _on_search_changed(self, text: str):
 		if not hasattr(self, "_search_timer"):

@@ -39,7 +39,6 @@ class LollipopChainsawRePOPPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/LollipopChainsawRePOP/Saved/SaveGames",
-					"%LOCALAPPDATA%/LollipopChainsawRePOP/Saved",
 				],
 			},
 		]

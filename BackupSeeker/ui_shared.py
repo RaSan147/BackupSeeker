@@ -112,29 +112,40 @@ def _hint_example_font(src):
 	return f
 
 
-def _quote(path: Path) -> str:
-    try:
-        return shlex.quote(str(path))
-    except Exception:
-        return str(path)
+def reveal_file_in_explorer(target: Path | str) -> None:
+    """Reveal a file in the platform file explorer (highlighted if supported)."""
+    import subprocess
+    path = Path(target).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Path does not exist: {path}")
+
+    if sys.platform.startswith("win"):
+        subprocess.Popen(["explorer", f"/select,{path}"])
+        return
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", str(path)])
+        return
+    # Linux and other platforms: open the containing directory safely
+    open_path_in_explorer(path.parent)
 
 
 def open_path_in_explorer(target: Path | str) -> None:
-    """Open a folder (or the parent of a file) in the platform file explorer."""
+    """Open a folder (or the nearest existing parent) in the platform file explorer."""
     path = Path(target)
-    if not path.exists():
-        raise FileNotFoundError(f"Path does not exist: {path}")
-    folder = path if path.is_dir() else path.parent
+    # Walk up to the nearest existing ancestor instead of raising
+    candidate = path if path.is_dir() else path.parent
+    while candidate != candidate.parent and not candidate.exists():
+        candidate = candidate.parent
+    folder = candidate
     folder_str = str(folder)
 
     if sys.platform.startswith("win"):
         os.startfile(folder_str)  # type: ignore[attr-defined]
         return
     if sys.platform == "darwin":
-        os.system(f"open {_quote(folder)}")
+        os.system(f"open {shlex.quote(str(folder))}")
     else:
-        os.system(f"xdg-open {_quote(folder)}")
-
+        os.system(f"xdg-open {shlex.quote(str(folder))}")
 
 def confirm_action(parent, title: str, message: str) -> bool:
     """Show a confirmation prompt."""
@@ -247,17 +258,15 @@ def _field_labels_for_restore_input_key(
 
 	primary = pg.profile_primary_input_key()
 	if primary is not None and primary.strip() == key.strip():
-		hints_fn = getattr(pg, "primary_path_editor_hints", None)
-		if callable(hints_fn):
-			try:
-				hint_pair = hints_fn()
-			except Exception:
-				hint_pair = None
-			if isinstance(hint_pair, (tuple, list)) and len(hint_pair) >= 2:
-				h0 = str(hint_pair[0]).strip()
-				h1 = str(hint_pair[1]).strip()
-				if h0 and h1:
-					return h0, h1, h0
+		try:
+			hint_pair = pg.primary_path_editor_hints()
+		except Exception:
+			hint_pair = None
+		if isinstance(hint_pair, (tuple, list)) and len(hint_pair) >= 2:
+			h0 = str(hint_pair[0]).strip()
+			h1 = str(hint_pair[1]).strip()
+			if h0 and h1:
+				return h0, h1, h0
 
 	short = (spec_label or "").strip()
 	label = short if short else (key.replace("_", " ").strip().title() or "Folder")

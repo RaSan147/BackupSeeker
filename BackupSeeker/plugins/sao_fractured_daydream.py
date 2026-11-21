@@ -39,7 +39,6 @@ class SAOFracturedDaydreamPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/SAOFD/Saved/SaveGames",
-					"%LOCALAPPDATA%/SAOFD/Saved",
 				],
 			},
 		]

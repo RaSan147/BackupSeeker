@@ -39,7 +39,6 @@ class SAOFatalBulletPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/SAOFB/Saved/SaveGames",
-					"%LOCALAPPDATA%/SAOFB/Saved",
 				],
 			},
 		]

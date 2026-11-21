@@ -39,7 +39,6 @@ class CommandosOriginsPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/CommandosOrigins/Saved/SaveGames",
-					"%LOCALAPPDATA%/CommandosOrigins/Saved",
 				],
 			},
 		]

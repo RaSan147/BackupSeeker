@@ -39,7 +39,6 @@ class WuchangFallenFeathersPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/Wuchang/Saved/SaveGames",
-					"%LOCALAPPDATA%/Wuchang/Saved",
 				],
 			},
 		]

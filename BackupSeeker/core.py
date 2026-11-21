@@ -48,7 +48,7 @@ from .archive.constants import (
 	RESTORE_CLI_PATH,
 	ZIP_README_PATH,
 )
-from .pyroDB4 import PyroDB
+from .pyroDB4 import PyroDB, PyroTable
 from .archive.metadata import (  # noqa: F401
 	cached_archive_metadata,
 	read_archive_metadata,
@@ -796,12 +796,39 @@ class GameProfile:
 		)
 
 
+
+# GameProfile columns stored in the games table (superset of all to_dict() keys).
+_GAMES_TABLE_COLUMNS: tuple[str, ...] = (
+	"id", "name", "save_path", "plugin_inputs", "file_patterns",
+	"plugin_id", "plugin_version", "icon", "poster", "executable_path",
+)
+
+
 class ConfigManager:
 	def __init__(self, app_dir: Path | None = None) -> None:
 		self.app_dir = app_dir or Path(os.path.dirname(os.path.abspath(__file__)))
-		self.config_pdb_path = self.app_dir / "gsm_config.pdb"
-		# User view-only JSON export for inspection
+
+		# ── two separate files ───────────────────────────────────────────────
+		# gsm_settings.pdb  –  scalar / structured settings (PyroDB, auto_dump)
+		# gsm_games.pdb     –  one row per GameProfile    (PyroTable, WAL)
+		self._settings_pdb_path = self.app_dir / "gsm_settings.pdb"
+		self._games_pdb_path    = self.app_dir / "gsm_games.pdb"
+
+		# View-only JSON export for human inspection
 		self.config_view_json_path = self.app_dir / "gsm_config.json"
+
+		# Persistent handles — open once, live for the lifetime of ConfigManager
+		self._settings: PyroDB  = PyroDB(str(self._settings_pdb_path), auto_dump=True)
+		self._games_tbl: PyroTable = PyroTable(
+			str(self._games_pdb_path),
+			auto_dump=True,
+			use_wal=True,
+		)
+		# Ensure columns + unique index on "id" exist (idempotent across restarts).
+		self._games_tbl.add_column(*_GAMES_TABLE_COLUMNS, exist_ok=True, AD=False)
+		if "id" not in self._games_tbl.indexed_columns:
+			self._games_tbl.index_column("id", mode="unique", AD=True)
+
 		# Backup location settings
 		# backup_location_mode: "cwd" | "fixed"
 		# backup_fixed_path: user-chosen absolute path when mode == "fixed"
@@ -895,45 +922,20 @@ class ConfigManager:
 				prof.name = gn.strip()
 
 	def load_config(self) -> None:
-		data: dict = {}
+		# ── load settings ────────────────────────────────────────────────────
+		settings = dict(self._settings.items())
 
-		# One-time migration: if pdb does not exist yet but old json exists, seed from json
-		if not self.config_pdb_path.exists() and self.config_view_json_path.exists():
-			try:
-				with open(self.config_view_json_path, "r", encoding="utf-8") as f:
-					data = json.loads(f.read())
-				if data:
-					db = PyroDB(str(self.config_pdb_path), auto_dump=False)
-					for k, v in data.items():
-						db.set(k, v)
-					db.dump()
-			except Exception:
-				data = {}
-
-		# Single primary source: pyroDB4 database
-		if self.config_pdb_path.exists():
-			db = PyroDB(str(self.config_pdb_path), auto_dump=False)
-			data = dict(db.items())
-
-		if not data:
-			return
-
-		self.games.clear()
-		for game_data in data.get("games", []):
-			profile = GameProfile.from_dict(game_data)
-			self.games[profile.id] = profile
-
-		self.theme = data.get("theme", "system")
-		wg = data.get("window_geometry")
+		self.theme = settings.get("theme", "system")
+		wg = settings.get("window_geometry")
 		self.window_geometry = wg if isinstance(wg, str) and wg else None
-		self.table_widths = data.get("table_widths", [])
-		self.backup_location_mode = data.get("backup_location_mode", self.backup_location_mode)
-		self.backup_fixed_path = data.get("backup_fixed_path", self.backup_fixed_path)
-		cfv = data.get("config_format_version", 1)
+		self.table_widths = settings.get("table_widths", [])
+		self.backup_location_mode = settings.get("backup_location_mode", self.backup_location_mode)
+		self.backup_fixed_path = settings.get("backup_fixed_path", self.backup_fixed_path)
+		cfv = settings.get("config_format_version", 1)
 		self.config_format_version = int(cfv) if isinstance(cfv, int) else 1
+		self.developer_mode = bool(settings.get("developer_mode", False))
 
-		# Per-page list / cards - load before format migration ``save_config`` preserves them.
-		uv = data.get("ui_views")
+		uv = settings.get("ui_views")
 		if isinstance(uv, dict):
 			self.ui_view_dashboard_profiles = _normalize_ui_view_value(
 				uv.get("dashboard_profiles"), self.ui_view_dashboard_profiles
@@ -948,8 +950,16 @@ class ConfigManager:
 				uv.get("restore_dialog"), self.ui_view_restore_dialog
 			)
 
-		self.developer_mode = bool(data.get("developer_mode", False))
+		# ── load games ───────────────────────────────────────────────────────
+		self.games.clear()
+		for row in self._games_tbl.rows():
+			try:
+				profile = GameProfile.from_dict(row)
+				self.games[profile.id] = profile
+			except Exception:
+				pass
 
+		# ── format migration ─────────────────────────────────────────────────
 		if self.config_format_version != CONFIG_FORMAT_VERSION:
 			for prof in self.games.values():
 				if prof.plugin_id:
@@ -959,8 +969,8 @@ class ConfigManager:
 			self.save_config()
 
 	def save_config(self) -> None:
-		data = {
-			"games": [p.to_dict() for p in self.games.values()],
+		# ── persist settings ─────────────────────────────────────────────────
+		settings = {
 			"theme": self.theme,
 			"window_geometry": self.window_geometry,
 			"table_widths": self.table_widths,
@@ -976,29 +986,50 @@ class ConfigManager:
 				"restore_dialog": self.ui_view_restore_dialog,
 			},
 		}
+		for k, v in settings.items():
+			self._settings[k] = v  # auto_dump=True — each write is durable
 
-		# Direct storage: atomic MessagePack database with file lock via pyroDB4
-		db = PyroDB(str(self.config_pdb_path), auto_dump=False)
-		for k, v in data.items():
-			db.set(k, v)
-		db.dump()
+		# ── persist games (WAL-backed PyroTable) ─────────────────────────────
+		# Ensure all columns exist (idempotent).
+		self._games_tbl.add_column(*_GAMES_TABLE_COLUMNS, exist_ok=True, AD=False)
 
-		# View-only JSON export for inspection
+		# Build a lookup of existing row objects keyed by profile id.
+		existing: dict[str, Any] = {}
+		for row_obj in self._games_tbl.rows_obj():
+			rid = row_obj.get("id")
+			if rid:
+				existing[rid] = row_obj
+
+		# Update / insert each in-memory profile.
+		want_ids: set[str] = set()
+		for prof in self.games.values():
+			want_ids.add(prof.id)
+			row = {col: prof.to_dict().get(col) for col in _GAMES_TABLE_COLUMNS}
+			row_obj = existing.get(prof.id)
+			if row_obj is None:
+				# New profile — append a row.
+				self._games_tbl.add_row(row, AD=True)
+			else:
+				# Existing profile — bulk-update changed cells.
+				changed = {col: row[col] for col in _GAMES_TABLE_COLUMNS if row_obj.get(col) != row[col]}
+				if changed:
+					row_obj.update(changed, ignore_extra=True, AD=True)
+
+		# Delete rows whose profile no longer exists in self.games.
+		for prof_id, row_obj in list(existing.items()):
+			if prof_id not in want_ids:
+				row_obj.del_row(AD=True)
+
+		# ── view-only JSON export ─────────────────────────────────────────────
 		try:
+			combined = dict(settings)
+			combined["games"] = [p.to_dict() for p in self.games.values()]
 			tmp_path = self.config_view_json_path.with_suffix(".tmp")
 			with open(tmp_path, "w", encoding="utf-8") as f:
-				json.dump(data, f, indent=2)
-
-			replaced = False
-			for attempt in range(3):
-				try:
-					tmp_path.replace(self.config_view_json_path)
-					replaced = True
-					break
-				except PermissionError:
-					time.sleep(0.05)
-
-			if not replaced:
+				json.dump(combined, f, indent=2)
+			try:
+				tmp_path.replace(self.config_view_json_path)
+			except PermissionError:
 				import shutil
 				shutil.copyfile(str(tmp_path), str(self.config_view_json_path))
 				try:

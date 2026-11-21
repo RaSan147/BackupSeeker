@@ -39,7 +39,6 @@ class SquirrelWithAGunPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/SquirrelWithAGun/Saved/SaveGames",
-					"%LOCALAPPDATA%/SquirrelWithAGun/Saved",
 				],
 			},
 		]

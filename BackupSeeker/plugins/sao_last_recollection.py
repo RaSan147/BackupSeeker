@@ -39,7 +39,6 @@ class SAOLastRecollectionPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/SAOLR/Saved/SaveGames",
-					"%LOCALAPPDATA%/SAOLR/Saved",
 				],
 			},
 		]

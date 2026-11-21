@@ -39,7 +39,6 @@ class CrysisRemasteredPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%USERPROFILE%/Saved Games/CrysisRemastered/Save Games",
-					"%USERPROFILE%/Saved Games/CrysisRemastered",
 				],
 			},
 		]

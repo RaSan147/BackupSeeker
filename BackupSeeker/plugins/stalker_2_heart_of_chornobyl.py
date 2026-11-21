@@ -39,7 +39,6 @@ class Stalker2HeartOfChornobylPlugin(GamePlugin):
 				"kind": SAVE_KIND_DIRECTORY,
 				"paths": [
 					"%LOCALAPPDATA%/Stalker2/Saved/SaveGames",
-					"%LOCALAPPDATA%/Stalker2/Saved",
 				],
 			},
 		]

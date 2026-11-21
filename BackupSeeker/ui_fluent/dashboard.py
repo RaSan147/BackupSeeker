@@ -40,7 +40,7 @@ from ..core import ConfigManager, GameProfile
 from ..developer_mode import set_dev_widgets_visible
 from ..fluent_window import plugin_manager_from_widget, resolve_plugin_for_profile, toast_parent
 from ..modern_widgets import ModernGameEditor, RoundedCard
-from ..ui_shared import confirm_action
+from ..ui_shared import confirm_action, reveal_file_in_explorer
 from . import helpers as _dash_helpers
 from .helpers import (
 	_install_read_only_table,
@@ -581,13 +581,12 @@ class ModernDashboardInterface(QWidget):
 
         # If profile is plugin-backed, attempt to open its source (module)
         if prof.plugin_id:
-            pm = plugin_manager_from_widget(self)
-            plugin = None
-            if pm:
-                # plugin manager may provide helper to locate plugin for profile
-                plugin = pm.get_plugin_for_profile(prof.plugin_id)
-                if plugin is None:
+            plugin = resolve_plugin_for_profile(prof, self)
+            if plugin is None:
+                pm = plugin_manager_from_widget(self)
+                if pm:
                     plugin = pm.available_plugins.get(prof.plugin_id)
+
             if plugin is not None:
                 import importlib.util as _ilutil
                 mod_name = plugin.__class__.__module__
@@ -595,32 +594,35 @@ class ModernDashboardInterface(QWidget):
                 origin = spec.origin if spec is not None else None
                 if origin:
                     path = Path(origin)
-                    # If it's a python file, open Explorer selecting it on Windows
-                    if path.name.lower().endswith('.py'):
-                        if sys.platform.startswith('win'):
-                            subprocess.Popen(['explorer', '/select,', str(path)])
-                            return
-                        else:
-                            os.system(f"xdg-open '{path}'")
-                            return
-            # Fallback: try to open plugins/games.jsonc if it mentions this plugin id
+                    if path.is_file():
+                        reveal_file_in_explorer(path)
+                        return
+
+            # Check if defined in plugins/games.jsonc
             pjson = Path(self.config.app_dir) / 'plugins' / 'games.jsonc'
-            if pjson.exists():
-                text = pjson.read_text(encoding='utf-8')
-                if prof.plugin_id in text:
-                    if sys.platform.startswith('win'):
-                        subprocess.Popen(['explorer', '/select,', str(pjson)])
-                        return
-                    else:
-                        os.system(f"xdg-open '{pjson}'")
-                        return
-            # final fallback: open config file for manual editing
-            cfg = Path(self.config.config_path)
-            if sys.platform.startswith('win'):
-                subprocess.Popen(['explorer', '/select,', str(cfg)])
-                return
-            else:
-                os.system(f"xd-open '{cfg}'")
+            if pjson.is_file():
+                try:
+                    import json
+                    import re
+                    raw_text = pjson.read_text(encoding='utf-8')
+                    stripped = re.sub(r'//.*', '', raw_text)
+                    data = json.loads(stripped)
+                    if isinstance(data, list):
+                        plugin_ids = {item.get('id') for item in data if isinstance(item, dict)}
+                        if prof.plugin_id in plugin_ids:
+                            reveal_file_in_explorer(pjson)
+                            return
+                except Exception:
+                    pass
+
+            # Inform user instead of blindly opening unrelated files
+            InfoBar.warning(
+                "Plugin Profile",
+                f"Profile '{_profile_display_name(prof, self)}' is managed by plugin '{prof.plugin_id}' and cannot be edited directly.",
+                parent=toast_parent(self),
+                duration=5000,
+            )
+            return
 
         # Non-plugin-backed profiles: open in editor
         editor = ModernGameEditor(self.config.games.get(pid), self)
