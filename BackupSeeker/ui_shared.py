@@ -95,16 +95,14 @@ def _hint_example_font(src):
 	from PySide6.QtWidgets import QApplication
 
 	f = QFont(src)
-	if f.pointSize() <= 0 and f.pixelSize() <= 0:
-		app = QApplication.instance()
-		if isinstance(app, QApplication):
-			base = app.font()
-			if base.pointSize() > 0:
-				f.setPointSize(base.pointSize())
-			elif base.pixelSize() > 0:
-				f.setPixelSize(base.pixelSize())
-			else:
-				f.setPointSize(9)
+	app = QApplication.instance()
+	base = app.font() if isinstance(app, QApplication) else None
+
+	if f.pointSize() <= 0:
+		if base and base.pointSize() > 0:
+			f.setPointSize(base.pointSize())
+		elif base and base.pixelSize() > 0:
+			f.setPixelSize(base.pixelSize())
 		else:
 			f.setPointSize(9)
 	f.setItalic(True)

@@ -963,7 +963,26 @@ class ConfigManager:
 		try:
 			with open(tmp_path, "w", encoding="utf-8") as f:
 				json.dump(data, f, indent=2)
-			tmp_path.replace(self.config_path)
+
+			# On Windows, atomic replace can raise PermissionError if another process
+			# (IDE, editor, antivirus, file watcher) has the destination file open with
+			# non-overlapping sharing flags. Retry with small backoff before direct write fallback.
+			replaced = False
+			for attempt in range(5):
+				try:
+					tmp_path.replace(self.config_path)
+					replaced = True
+					break
+				except PermissionError:
+					time.sleep(0.05 * (attempt + 1))
+
+			if not replaced:
+				import shutil
+				shutil.copyfile(str(tmp_path), str(self.config_path))
+				try:
+					tmp_path.unlink(missing_ok=True)
+				except OSError:
+					pass
 		except Exception:
 			log_and_reraise(
 				f"Cannot write config to {self.config_path}",
