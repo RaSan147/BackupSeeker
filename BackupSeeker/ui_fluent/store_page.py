@@ -46,6 +46,7 @@ from .helpers import (
 	_install_read_only_table,
 )
 from .poster_refresh import PosterRefreshCoordinator
+from .shimmer import ShimmerSkeleton
 from .profile_visuals import (
 	POSTER_LABEL_NAME,
 	ProfilePosterService,
@@ -118,9 +119,12 @@ class StoreCardWidget(RoundedCard):
 		)
 		p_layout = QVBoxLayout(self.poster_frame)
 		p_layout.setContentsMargins(0, 0, 0, 0)
+		self.shimmer = ShimmerSkeleton(self.poster_frame, corner_radius=6)
+		p_layout.addWidget(self.shimmer)
 		self.poster_label = QLabel(self.poster_frame)
 		self.poster_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 		self.poster_label.setObjectName(POSTER_LABEL_NAME)
+		self.poster_label.hide()
 		p_layout.addWidget(self.poster_label)
 		layout.addWidget(self.poster_frame)
 
@@ -229,6 +233,8 @@ class StoreCardWidget(RoundedCard):
 		self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
 
 	def _show_poster_placeholder(self) -> None:
+		self.shimmer.hide()
+		self.poster_label.show()
 		self.poster_label.clear()
 		self.poster_label.setText("GAME")
 		is_dark = is_app_dark()
@@ -243,6 +249,8 @@ class StoreCardWidget(RoundedCard):
 		saved = getattr(self.plugin, "_saved_poster", "")
 		if saved and Path(saved).is_file():
 			if apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE):
+				self.shimmer.hide()
+				self.poster_label.show()
 				return
 
 		pm = self._posters.plugin_manager()
@@ -256,7 +264,9 @@ class StoreCardWidget(RoundedCard):
 			return
 		saved = getattr(self.plugin, "_saved_poster", "")
 		if saved and Path(saved).is_file():
-			apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE)
+			if apply_cached_poster(self.poster_label, saved, self._CARD_POSTER_SIZE):
+				self.shimmer.hide()
+				self.poster_label.show()
 
 	def mousePressEvent(self, event):
 		if event.button() == Qt.MouseButton.LeftButton:

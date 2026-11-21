@@ -48,6 +48,7 @@ from .helpers import (
 	ui_view_mode_from_combo_text,
 )
 from .poster_refresh import PosterRefreshCoordinator
+from .shimmer import ShimmerSkeleton
 from .profile_visuals import (
 	POSTER_LABEL_NAME,
 	ProfilePosterService,
@@ -116,9 +117,12 @@ class GameCardWidget(RoundedCard):
 		)
 		p_layout = QVBoxLayout(self.poster_frame)
 		p_layout.setContentsMargins(0, 0, 0, 0)
+		self.shimmer = ShimmerSkeleton(self.poster_frame, corner_radius=6)
+		p_layout.addWidget(self.shimmer)
 		self.poster_label = QLabel(self.poster_frame)
 		self.poster_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 		self.poster_label.setObjectName(POSTER_LABEL_NAME)
+		self.poster_label.hide()
 		p_layout.addWidget(self.poster_label)
 		layout.addWidget(self.poster_frame)
 
@@ -183,6 +187,8 @@ class GameCardWidget(RoundedCard):
 		self.style().drawPrimitive(QStyle.PrimitiveElement.PE_Widget, opt, p, self)
 
 	def _show_poster_placeholder(self) -> None:
+		self.shimmer.hide()
+		self.poster_label.show()
 		self.poster_label.clear()
 		self.poster_label.setText("GAME")
 		is_dark = is_app_dark()
@@ -200,11 +206,15 @@ class GameCardWidget(RoundedCard):
 				return
 			p_path = self._posters.poster_path(self.profile, queue_download=False)
 			if p_path and Path(p_path).is_file():
-				apply_cached_poster(self.poster_label, p_path, self._CARD_POSTER_SIZE)
+				if apply_cached_poster(self.poster_label, p_path, self._CARD_POSTER_SIZE):
+					self.shimmer.hide()
+					self.poster_label.show()
 
 		p_path = self._posters.poster_path(self.profile, on_complete=_on_ready)
 		if p_path and Path(p_path).is_file():
 			if apply_cached_poster(self.poster_label, p_path, self._CARD_POSTER_SIZE):
+				self.shimmer.hide()
+				self.poster_label.show()
 				return
 
 		self._show_poster_placeholder()
